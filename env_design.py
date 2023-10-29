@@ -205,42 +205,36 @@ def evaluate_regret_of_maze(env, walls, s_reward, m_reward):
     maze = ConstructedMazeEnv(
         size=env.width, walls=walls
     )  # just change the transition function, maybe
+    # Calculate V^\pi for our point estimate of the reward
+
+    maze.rewards = m_reward
+    V_mean, x, y = value_iteration(maze)
+
+    negatives = 0
+
     # Calculate V^* for each sampled reward
     for reward in s_reward:
         maze.rewards = reward
         V, x, y = value_iteration(maze)
-        regret += V[env.width + 1] / len(s_reward)
+        negatives += int((V[env.width + 1] - V_mean[env.width + 1]) < 0)
 
-    # Calculate V^\pi for our point estimate of the reward
-    maze.rewards = m_reward
-    V_mean, x, y = value_iteration(maze)
+        regret += V[env.width + 1] / len(s_reward)
 
     regret -= V_mean[env.width + 1]
     # maze.render()
     # time.sleep(2)
     # maze.reset()
     # maze.close()
+    print(f"Regret: {regret}, Negatives pct: {negatives / len(s_reward):.5%}")
     return regret
 
 
 # Evaluate Bayesian regret of environment w.r.t. sampled rewards and posterior mean
 def evaluate_likelihood_regret_of_maze(env, walls, s_reward, m_reward, compact_obs):
-    likelihood_star = 0
+    regret = 0
     maze = ConstructedMazeEnv(
         size=env.width, walls=walls
     )  # just change the transition function, maybe
-    # Calculate l^* for each sampled reward
-    for reward in s_reward:
-        # likelihood_star += get_log_likelihood(
-        #     reward,
-        #     compact_obs,
-        # )
-        likelihood_star += get_likelihood(
-            reward,
-            compact_obs,
-        )[0]
-
-    likelihood_star /= len(s_reward)
 
     # Calculate l^\pi for our point estimate of the reward
     # likelihood_pi = get_log_likelihood(
@@ -253,8 +247,21 @@ def evaluate_likelihood_regret_of_maze(env, walls, s_reward, m_reward, compact_o
         compact_obs,
     )[0]
 
-    regret = likelihood_star - likelihood_pi
-    print(regret)
+    # Calculate l^* for each sampled reward
+    for reward in s_reward:
+        # likelihood_star += get_log_likelihood(
+        #     reward,
+        #     compact_obs,
+        # )
+        likelihood_star = get_likelihood(
+            reward,
+            compact_obs,
+        )[
+            0
+        ] / len(s_reward)
+
+        regret += np.abs(likelihood_star - likelihood_pi)
+
     # maze.render()
     # time.sleep(2)
     # maze.reset()
