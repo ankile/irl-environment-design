@@ -19,6 +19,7 @@ birl_sample_size = 1_000
 observations = []
 n_episodes = 3
 obs_per_eps = 2
+
 for episode in trange(n_episodes, desc="Episode"):
     if episode == 0:
         s_reward = uniform_samples

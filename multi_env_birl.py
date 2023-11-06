@@ -116,7 +116,6 @@ def get_likelihood(reward, compact_obs, beta=20):
         for traj in obs[1:]:
             for s, a in traj:
                 likelihood *= Q_exp[s, a] / np.sum(Q_exp[s, :])
-                # print(Q_exp[s, a] / np.sum(Q_exp[s, :]))
                 # there can be issues with floating points, as likelihoods can be very small
                 # we resolve the issue by scaling (and remembering how much we scaled)
                 while likelihood < 1e-100:
