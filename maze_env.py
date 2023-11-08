@@ -94,6 +94,38 @@ class ConstructedMazeEnv16x16(ConstructedMazeEnv):
         super().__init__(size=16, walls=walls)
 
 
+class SmallConstructedMazeEnv(ConstructedMazeEnv):
+    def __init__(self, walls=[], **kwargs):
+        super().__init__(size=5, walls=walls)
+
+    def _gen_grid(self, width, height):
+        # Create an empty grid
+        self.grid = Grid(width, height)
+
+        # Generate the surrounding walls
+        self.grid.wall_rect(0, 0, width, height)
+
+        # Place small reward in the lower left corner
+        self.put_obj(Goal(), 1, height - 2)
+
+        # Place big reward in the lower right corner
+        self.put_obj(Goal(), width - 2, height - 2)
+
+        # Place the agent
+        if self.agent_start_pos is not None:
+            self.agent_pos = self.agent_start_pos
+            self.agent_dir = self.agent_start_dir
+        else:
+            self.place_agent()
+
+        self.mission = "get to a green goal square"
+
+        # ADDED: Attribute Walls, a list containing all coordinates where walls are being placed
+        for coord in self.walls:
+            # assert self.grid.get(*coord) is None
+            self.put_obj(Wall(), coord[0], coord[1])
+
+
 # register(
 #     id='MiniGrid-Empty-16x16-v0',
 #     entry_point='gym_minigrid.envs:EmptyEnv16x16'

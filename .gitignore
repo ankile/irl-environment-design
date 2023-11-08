@@ -11,4 +11,5 @@ dist/*
 .DS_Store
 venv
 
+results/
 plots
