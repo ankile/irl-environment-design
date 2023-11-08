@@ -1,9 +1,10 @@
 import numpy as np
 import math
+from gym_minigrid.minigrid import MiniGridEnv
 
 
 # Implementation of standard value iteration to solve mazes
-def value_iteration(env, delta=0.001):
+def value_iteration(env: MiniGridEnv, delta=0.001):
     V = np.zeros(env.state_space.n)
     Q = np.zeros([env.state_space.n, env.action_space.n])
     pol = np.zeros([env.state_space.n, env.action_space.n])
@@ -28,7 +29,6 @@ def value_iteration(env, delta=0.001):
                 Q[s, a] = env.get_reward(s) + env.gamma * np.dot(
                     env.get_transition_probabilities(s, a), V[:]
                 )
-                print(Q)
             V[s] = max(Q[s, :])
         if max(np.abs(V_old - V)) < delta:
             for s in eff_state_space:

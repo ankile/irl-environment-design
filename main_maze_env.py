@@ -12,10 +12,10 @@ from random import sample
 
 size = 9
 base_env = ConstructedMazeEnv(size=size)
-n_environment_samples = 1_000
+n_environment_samples = 20
 n_reward_samples = 750
 uniform_samples = [np.random.uniform(0, 1, size**2) for _ in range(n_reward_samples)]
-birl_sample_size = 1_000
+birl_sample_size = 10_000
 observations = []
 n_episodes = 3
 obs_per_eps = 2
@@ -28,8 +28,8 @@ for episode in trange(n_episodes, desc="Episode"):
             [1 for _ in range(size**2)],
             episode=episode,
         )
-        # walls = []
-        walls = domain_randomisation(base_env)  # domain randomisation
+        walls = []
+        # walls = domain_randomisation(base_env)  # domain randomisation
     else:
         (
             posterior_samples,
