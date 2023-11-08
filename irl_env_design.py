@@ -1,3 +1,4 @@
+from multiprocessing import Pool
 import numpy as np
 from numba import njit
 import matplotlib.pyplot as plt
@@ -12,6 +13,8 @@ from collections import deque
 
 from datetime import datetime
 from collections import namedtuple
+from concurrent.futures import ThreadPoolExecutor
+
 
 from pathlib import Path
 import torch
@@ -554,90 +557,102 @@ def environment_search(
     # Create the true transition matrix
     absorbing_states = np.where(R != 0)[0]  # Absorbing states
 
-    # 1. Initialize storage
-    highest_regret = -np.inf
-
     # 2. Sample $n$ parameter tuples from the prior
     # Now done outside of this function
 
     # 3. Generate $m$ different candidate environments
     candidate_envs = get_candidate_environments(
-        n_env_samples, N, M, T_true, R, randomize_start_state=True
-    )
-    pbar = tqdm(
-        candidate_envs,
-        desc="Evaluating candidate environments",
-        postfix={"highest_regret": highest_regret},
+        n_env_samples, N, M, T_true, R, randomize_start_state=False
     )
 
-    for candidate_env in pbar:
-        policies = []
-        trajectories = []
-        likelihoods = []
+    args = [
+        (env, posterior_sample, n_traj_per_sample, N, M, R, T_true, absorbing_states)
+        for env in candidate_envs
+    ]
 
-        for p, gamma in posterior_sample:
-            # 4.1.1 Find the optimal policy for this env and posterior sample
-            T_agent = transition_matrix(N, M, p=p, R=R)
-            policy = soft_q_iteration(R, T_agent, gamma=gamma, beta=100.0)
-            policies.append(policy)
-
-            # 4.1.2 Generate $m$ trajectories from this policy
-            policy_traj = generate_n_trajectories(
-                candidate_env.T_true,
-                policy,
-                absorbing_states,
-                start_state=candidate_env.start_state,
-                n_trajectories=n_traj_per_sample,
-                # Walking from the top-left to the bottom-right corner takes at most N + M - 2 steps
-                # so we allow twice this at most
-                max_steps=(N + M - 2) * 2,
-            )
-
-            # 4.1.3 Calculate the likelihood of the trajectories
-            policy_likelihoods = [
-                compute_log_likelihood(candidate_env.T_true, policy, traj)
-                for traj in policy_traj
-            ]
-
-            # 4.1.4 Store the trajectories and likelihoods
-            trajectories += policy_traj
-            likelihoods += policy_likelihoods
-
-        # 4.2 Find the policy with the highest likelihood
-        most_likely_policy = grad_policy_maximization(
-            n_states,
-            n_actions,
-            trajectories,
-            T_true,
-            n_iter=100,
+    # Parallel processing with multiprocessing and tqdm
+    with Pool(12) as pool:
+        candidate_envs = list(
+            tqdm(pool.imap(process_candidate_env, args), total=len(args))
         )
-        candidate_env.max_likelihood_policy = most_likely_policy
-
-        # raise Exception("STOP")
-
-        # 4.3 Calculate the regret of the most likely policy
-        most_likely_likelihoods = [
-            compute_log_likelihood(T_true, most_likely_policy, traj)
-            for traj in trajectories
-        ]
-
-        all_likelihoods = np.array([likelihoods, most_likely_likelihoods]).T
-        candidate_env.log_likelihoods = all_likelihoods.mean(axis=0)
-        candidate_env.log_regret = np.diff(candidate_env.log_likelihoods).item()
-
-        all_likelihoods = np.exp(all_likelihoods)
-        candidate_env.likelihoods = all_likelihoods.mean(axis=0)
-        candidate_env.regret = -np.diff(candidate_env.likelihoods).item()
-
-        candidate_env.trajectories = trajectories
-
-        # 4.4 If the regret is higher than the highest regret so far, store the env and policy
-        if candidate_env.regret > highest_regret:
-            highest_regret = candidate_env.regret
-            pbar.set_postfix({"highest_regret": highest_regret})
 
     # 5. Return the environments (ordered by regret, with higest regret first)
     return sorted(candidate_envs, key=lambda env: env.regret, reverse=True)
+
+
+def process_candidate_env(args):
+    (
+        candidate_env,
+        posterior_sample,
+        n_traj_per_sample,
+        N,
+        M,
+        R,
+        T_true,
+        absorbing_states,
+    ) = args
+    policies = []
+    trajectories = []
+    likelihoods = []
+    n_states, n_actions = N * M, 4
+
+    for p, gamma in posterior_sample:
+        # 4.1.1 Find the optimal policy for this env and posterior sample
+        T_agent = transition_matrix(N, M, p=p, R=R)
+        policy = soft_q_iteration(R, T_agent, gamma=gamma, beta=100.0)
+        policies.append(policy)
+
+        # 4.1.2 Generate $m$ trajectories from this policy
+        policy_traj = generate_n_trajectories(
+            candidate_env.T_true,
+            policy,
+            absorbing_states,
+            start_state=candidate_env.start_state,
+            n_trajectories=n_traj_per_sample,
+            # Walking from the top-left to the bottom-right corner takes at most N + M - 2 steps
+            # so we allow twice this at most
+            max_steps=(N + M - 2) * 2,
+        )
+
+        # 4.1.3 Calculate the likelihood of the trajectories
+        policy_likelihoods = [
+            compute_log_likelihood(candidate_env.T_true, policy, traj)
+            for traj in policy_traj
+        ]
+
+        # 4.1.4 Store the trajectories and likelihoods
+        trajectories += policy_traj
+        likelihoods += policy_likelihoods
+
+        # 4.2 Find the policy with the highest likelihood
+    most_likely_policy = grad_policy_maximization(
+        n_states,
+        n_actions,
+        trajectories,
+        T_true,
+        n_iter=100,
+    )
+    candidate_env.max_likelihood_policy = most_likely_policy
+
+    # raise Exception("STOP")
+
+    # 4.3 Calculate the regret of the most likely policy
+    most_likely_likelihoods = [
+        compute_log_likelihood(T_true, most_likely_policy, traj)
+        for traj in trajectories
+    ]
+
+    all_likelihoods = np.array([likelihoods, most_likely_likelihoods]).T
+    candidate_env.log_likelihoods = all_likelihoods.mean(axis=0)
+    candidate_env.log_regret = np.diff(candidate_env.log_likelihoods).item()
+
+    all_likelihoods = np.exp(all_likelihoods)
+    candidate_env.likelihoods = all_likelihoods.mean(axis=0)
+    candidate_env.regret = -np.diff(candidate_env.likelihoods).item()
+
+    candidate_env.trajectories = trajectories
+
+    return candidate_env
 
 
 def plot_environments_with_regret(envs):
@@ -971,7 +986,7 @@ if __name__ == "__main__":
     true_params = ParamTuple(agent_p, agent_gamma)
 
     # Run the experiment
-    n_env_samples = 20
+    n_env_samples = 120
     n_posterior_samples = 2_000
     n_traj_per_sample = 10
 
