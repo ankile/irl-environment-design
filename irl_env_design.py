@@ -571,9 +571,9 @@ def environment_search(
     ]
 
     # Parallel processing with multiprocessing and tqdm
-    with Pool(12) as pool:
+    with Pool(64) as pool:
         candidate_envs = list(
-            tqdm(pool.imap(process_candidate_env, args), total=len(args))
+            tqdm(pool.imap(process_candidate_env, args), total=len(args), leave=False)
         )
 
     # 5. Return the environments (ordered by regret, with higest regret first)
@@ -633,8 +633,6 @@ def process_candidate_env(args):
         n_iter=100,
     )
     candidate_env.max_likelihood_policy = most_likely_policy
-
-    # raise Exception("STOP")
 
     # 4.3 Calculate the regret of the most likely policy
     most_likely_likelihoods = [
@@ -919,7 +917,7 @@ def environment_design_experiment(
     # Remove burn-in
     posterior_samples = posterior_samples[-1_000:]
 
-    for i in range(n_rounds):
+    for i in trange(n_rounds, desc="Rounds"):
         # Sample a subset of the posterior samples
         sample_idxs = np.random.choice(
             np.arange(len(posterior_samples)), size=100, replace=False
@@ -978,17 +976,15 @@ def environment_design_experiment(
     return expert_trajectories, posterior_samples
 
 
-# Start by making the agent we want to learn the policy of
-
 if __name__ == "__main__":
-    agent_p = 0.9
-    agent_gamma = 0.8
+    agent_p = 0.7
+    agent_gamma = 0.7
     true_params = ParamTuple(agent_p, agent_gamma)
 
     # Run the experiment
-    n_env_samples = 120
+    n_env_samples = 100
     n_posterior_samples = 2_000
-    n_traj_per_sample = 10
+    n_traj_per_sample = 20
 
     ## 0.2 Setup the environment
     N, M = 6, 6
@@ -996,19 +992,23 @@ if __name__ == "__main__":
 
     # Create a type of BigSmall world with a dangerous zone
     R = np.zeros((N, M))
-    R[-1, 0] = 10
+    R[-1, 0] = 5
+    R[-1, 1] = 10
     R[-1, 2] = 15
-    R[-1, -1] = 25
+    R[-1, 3] = 20
+    R[-1, 4] = 25
+    R[-1, 5] = 30
 
-    R[0, -1] = 15
-    R[3, -1] = 20
+    R[0, -1] = 10
+    R[2, -1] = 20
 
     R[1, -2] = -1
-    R[2, -2] = -1
-    R[2, -3] = -1
+    R[1, -3] = -1
+    R[3, -2] = -1
+    R[3, -3] = -1
     R = R.flatten()
 
-    p_true = 0.9
+    p_true = 0.95
     T_true = transition_matrix(N, M, p=p_true, R=R)
 
     base_env = Environment(N, M, R, T_true, wall_states=[])
