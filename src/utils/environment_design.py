@@ -11,7 +11,6 @@ def environment_search(
     M,
     how,
     goal_states,
-    n_env_samples,
     posterior_samples,
     n_traj_per_sample,
     candidate_envs,

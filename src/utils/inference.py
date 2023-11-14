@@ -63,7 +63,7 @@ def log_likelihood_torch(T, policy, trajectory):
 
 
 def get_parameter_sample(
-    n_samples: int, n_states: int, ranges=[[0.5, 0.999], [0.5, 0.999], [1, 10]]
+    n_samples: int, N: int, M: int, ranges=[[0.5, 0.999], [0.5, 0.999], [1, 10]]
 ):
     """
     Returns a list of prior samples of (T_p, \gamma, R)
@@ -74,51 +74,51 @@ def get_parameter_sample(
     - ranges, optional, specifies the ranges from which we sample for each argument, is of shape [[lower_range_gamma, higher_range_gamma
     ], [lower_range_p, higher_range_p], [lower_range_R, higher_range_R]]. Ranges for R must be integers and are divided by 10.
     """
+    n_states = N*M
 
     n_cbrt = int(np.cbrt(n_samples))
     ps = np.linspace(ranges[0][0], ranges[0][1], n_cbrt)
     gammas = np.linspace(ranges[1][0], ranges[1][1], n_cbrt)
     Rs = np.random.randint(ranges[2][0], ranges[2][1], size=(n_cbrt, n_states)) / 10
 
-    # if n_states == 36:
-    #     print("Update Rewards, create richer reward landscape")
-    #     for R in Rs:
-    #         R = np.reshape(R, (int(np.sqrt(n_states)), int(np.sqrt(n_states))))
-    #         rand_num = np.random.random()
+    print("Update Rewards, create richer reward landscape")
+    for R in Rs:
+        R = np.reshape(R, (int(np.sqrt(n_states)), int(np.sqrt(n_states))))
+        rand_num = np.random.random()
 
-    #         if rand_num < 0.5:
-    #             R[4, 4] += 3
-    #             R[5, 5] += 3
-    #             R[4, 5] += 3
-    #             R[5, 4] += 3
+        if rand_num < 0.999:
+            R[N-5, M-1] += 3
+            R[N-4, M-1] += 3
+            R[N-5, M-2] += 3
+            R[N-4, M-2] += 3
 
-    #             R[2, 2] += -2
-    #             R[3, 3] += -2
-    #             R[2, 3] += -2
-    #             R[3, 2] += -2
+            R[2, 2] += -2
+            R[3, 3] += -2
+            R[2, 3] += -2
+            R[3, 2] += -2
 
-    #             R[0, 0] += 0.5
-    #             R[1, 1] += 0.5
-    #             R[0, 1] += 0.5
-    #             R[1, 0] += 0.5
+            R[0, 0] += 0.5
+            R[1, 1] += 0.5
+            R[0, 1] += 0.5
+            R[1, 0] += 0.5
 
-    #         else:
-    #             R[1, 4] += 3
-    #             R[2, 5] += 3
-    #             R[1, 5] += 3
-    #             R[2, 4] += 3
+        else:
+            R[N-2, M-1] += 3
+            R[N-1, M-1] += 3
+            R[N-2, M-2] += 3
+            R[N-1, M-2] += 3
 
-    #             R[2, 2] += -2
-    #             R[3, 3] += -2
-    #             R[2, 3] += -2
-    #             R[3, 2] += -2
+            R[2, 2] += -2
+            R[3, 3] += -2
+            R[2, 3] += -2
+            R[3, 2] += -2
 
-    #             R[0, 0] += 0.5
-    #             R[1, 1] += 0.5
-    #             R[0, 1] += 0.5
-    #             R[1, 0] += 0.5
+            R[0, 0] += 0.5
+            R[1, 1] += 0.5
+            R[0, 1] += 0.5
+            R[1, 0] += 0.5
 
-    #         R = np.reshape(R, n_states)
+        R = np.reshape(R, n_states)
 
     samples = list(product(ps, gammas, Rs))
     return samples

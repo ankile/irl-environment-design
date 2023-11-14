@@ -1,4 +1,8 @@
 import matplotlib.pyplot as plt
+from matplotlib.patches import Circle
+import numpy as np
+
+from .constants import ParamTuple, gamma_limits, p_limits, R_limits
 
 def plot_trajectories(N, M, trajectories, reward_matrix, ax=None):
     if ax is None:
@@ -84,3 +88,76 @@ def plot_environments_with_regret(envs):
 
         else:
             fig.suptitle(f"Regret: {env.regret:.3f}")
+
+
+def plot_posterior_distribution(
+    posterior_samples: list[ParamTuple], 
+    N: int, 
+    M: int, 
+    absorbing_states: np.array=None,
+    true_params: ParamTuple = None, 
+    ax=None
+):
+    """
+    Plot the join distribution of p and gamma from the posterior samples as a 2D histogram.
+    Plot the mean of the reward distribution as a grid
+    """
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(6, 4))
+    # Unzipping the list of tuples
+    p_values, gamma_values, R_values = zip(*(posterior_samples))
+
+    # Plotting the 2D distribution
+    ax.scatter(p_values, gamma_values, alpha=0.3)
+    ax.set_title("Posterior distribution over $\gamma$ and $p$")
+    ax.set_xlabel("$p_i$")
+    ax.set_ylabel("$\\gamma_i$")
+    ax.grid(True)
+    ax.set_xlim(p_limits)
+    ax.set_ylim(gamma_limits)
+
+    if true_params is not None:
+        ax.scatter(
+            true_params.p,
+            true_params.gamma,
+            marker="*",
+            color="red",
+            label="True parameters",
+        )
+        ax.legend()
+
+    posterior_samples_reward_mean = np.mean(R_values, axis = 0)
+    posterior_samples_reward_variance = np.var(R_values, axis=0)
+    posterior_samples_reward_mean = posterior_samples_reward_mean.reshape(N,M)
+    posterior_samples_reward_variance = posterior_samples_reward_variance.reshape(N,M)
+
+
+    fig, ax = plt.subplots()
+
+    plt.imshow(posterior_samples_reward_mean, cmap=plt.cm.seismic, vmin=np.min(R_values), vmax=np.max(R_values))
+    plt.colorbar()
+    plt.title("Mean of Reward Samples")
+
+    if absorbing_states is not None:
+        N_goal, M_goal = absorbing_states[0] // N, absorbing_states[0] % N
+        ax.add_patch(Circle((M_goal, N_goal), 0.3, color="darkgray", label="Absorbing States"))
+        for goal_state in absorbing_states[1:]:
+            N_goal, M_goal = goal_state // N, goal_state % N
+            ax.add_patch(Circle((M_goal, N_goal), 0.3, color="darkgray"))
+
+        plt.legend(loc="lower left", bbox_to_anchor=(-0, -0.17), fancybox=True, shadow=True)
+
+    fig, ax = plt.subplots()
+
+    plt.imshow(posterior_samples_reward_variance, cmap=plt.cm.seismic, vmin = -np.max(np.abs(R_values)), vmax = np.max(np.abs(R_values)))
+    plt.colorbar()
+    plt.title("Variance of Reward Samples")
+    
+    if absorbing_states is not None:
+        N_goal, M_goal = absorbing_states[0] // N, absorbing_states[0] % N
+        ax.add_patch(Circle((M_goal, N_goal), 0.3, color="darkgray", label="Absorbing States"))
+        for goal_state in absorbing_states[1:]:
+            N_goal, M_goal = goal_state // N, goal_state % N
+            ax.add_patch(Circle((M_goal, N_goal), 0.3, color="darkgray"))
+
+        plt.legend(loc="lower left", bbox_to_anchor=(-0, -0.17), fancybox=True, shadow=True)
