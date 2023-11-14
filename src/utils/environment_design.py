@@ -3,7 +3,8 @@ import numpy as np
 
 from .make_environment import transition_matrix
 from .optimization import soft_q_iteration, grad_policy_maximization, value_iteration_with_policy
-from .inference import generate_n_trajectories, compute_log_likelihood
+from .inference.rollouts import generate_n_trajectories
+from .inference.likelihood import compute_log_likelihood
 
 
 def environment_search(
@@ -14,7 +15,8 @@ def environment_search(
     posterior_samples,
     n_traj_per_sample,
     candidate_envs,
-    n_actions = 4
+    n_actions = 4,
+    return_sorted = True
 ):
     """
     N, M: width and length of environment
@@ -118,8 +120,10 @@ def environment_search(
             del R_sample_mean
 
         # 5. Return the environments (ordered by regret, with higest regret first)
-        # return sorted(candidate_envs, key=lambda env: env.regret, reverse=True)
-        return candidate_envs
+        if return_sorted:
+            return sorted(candidate_envs, key=lambda env: env.regret, reverse=True)
+        else:
+            return candidate_envs
 
     elif how == "value":
         """
@@ -169,7 +173,11 @@ def environment_search(
             candidate_env.R_sample_mean = R_sample_mean
 
         # 5. Return the environments (ordered by regret, with higest regret first)
-        return sorted(candidate_envs, key=lambda env: env.regret, reverse=True)
+        if return_sorted:
+            return sorted(candidate_envs, key=lambda env: env.regret, reverse=True)
+        else:
+            return candidate_envs
+        
 
     # you gave an incorrect value for how we should learn
     else:

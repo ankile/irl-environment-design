@@ -1,6 +1,7 @@
 from collections import namedtuple
 
 ParamTuple = namedtuple("ParamTuple", ["p", "gamma", "R"])
+StateTransition = namedtuple("StateTransition", ["s", "a", "s_next"])
 
 p_limits = (0.5, 0.999)
 gamma_limits = (0.5, 0.999)
