@@ -103,28 +103,27 @@ def plot_posterior_distribution(
     Plot the mean of the reward distribution as a grid
     """
     if ax is None:
-        fig, ax = plt.subplots(figsize=(6, 4))
+        fig, axs = plt.subplots(nrows = 1, ncols = 3, figsize = (15, 5))
     # Unzipping the list of tuples
     p_values, gamma_values, R_values = zip(*(posterior_samples))
 
     # Plotting the 2D distribution
-    ax.scatter(p_values, gamma_values, alpha=0.3)
-    ax.set_title("Posterior distribution over $\gamma$ and $p$")
-    ax.set_xlabel("$p_i$")
-    ax.set_ylabel("$\\gamma_i$")
-    ax.grid(True)
-    ax.set_xlim(p_limits)
-    ax.set_ylim(gamma_limits)
-
+    axs[0].scatter(p_values, gamma_values, alpha=0.3)
+    axs[0].set_title("Posterior distribution over $\gamma$ and $p$")
+    axs[0].set_xlabel("$p_i$")
+    axs[0].set_ylabel("$\\gamma_i$")
+    axs[0].grid(True)
+    axs[0].set_xlim(p_limits)
+    axs[0].set_ylim(gamma_limits)
     if true_params is not None:
-        ax.scatter(
-            true_params.p,
-            true_params.gamma,
-            marker="*",
-            color="red",
-            label="True parameters",
-        )
-        ax.legend()
+            axs[0].scatter(
+                true_params.p,
+                true_params.gamma,
+                marker="*",
+                color="red",
+                label="True parameters",
+            )
+            axs[0].legend()
 
     posterior_samples_reward_mean = np.mean(R_values, axis = 0)
     posterior_samples_reward_variance = np.var(R_values, axis=0)
@@ -132,32 +131,28 @@ def plot_posterior_distribution(
     posterior_samples_reward_variance = posterior_samples_reward_variance.reshape(N,M)
 
 
-    fig, ax = plt.subplots()
-
-    plt.imshow(posterior_samples_reward_mean, cmap=plt.cm.seismic, vmin=np.min(R_values), vmax=np.max(R_values))
-    plt.colorbar()
-    plt.title("Mean of Reward Samples")
+    img_1 = axs[1].imshow(posterior_samples_reward_mean, cmap=plt.cm.seismic, vmin=np.min(R_values), vmax=np.max(R_values))
+    plt.colorbar(img_1, ax=axs[1])
+    axs[1].set_title("Mean of Reward Samples")
 
     if absorbing_states is not None:
         N_goal, M_goal = absorbing_states[0] // N, absorbing_states[0] % N
-        ax.add_patch(Circle((M_goal, N_goal), 0.3, color="darkgray", label="Absorbing States"))
+        axs[1].add_patch(Circle((M_goal, N_goal), 0.3, color="darkgray", label="Absorbing States"))
         for goal_state in absorbing_states[1:]:
             N_goal, M_goal = goal_state // N, goal_state % N
-            ax.add_patch(Circle((M_goal, N_goal), 0.3, color="darkgray"))
+            axs[1].add_patch(Circle((M_goal, N_goal), 0.3, color="darkgray"))
 
-        plt.legend(loc="lower left", bbox_to_anchor=(-0, -0.17), fancybox=True, shadow=True)
+        # plt.legend(loc="lower left", bbox_to_anchor=(-0, -0.17), fancybox=True, shadow=True)
 
-    fig, ax = plt.subplots()
-
-    plt.imshow(posterior_samples_reward_variance, cmap=plt.cm.seismic, vmin = -np.max(np.abs(R_values)), vmax = np.max(np.abs(R_values)))
-    plt.colorbar()
-    plt.title("Variance of Reward Samples")
+    img_2 = axs[2].imshow(posterior_samples_reward_variance, cmap=plt.cm.seismic, vmin = -np.max(np.abs(R_values)), vmax = np.max(np.abs(R_values)))
+    plt.colorbar(img_2, ax=axs[2])
+    axs[2].set_title("Variance of Reward Samples")
     
     if absorbing_states is not None:
         N_goal, M_goal = absorbing_states[0] // N, absorbing_states[0] % N
-        ax.add_patch(Circle((M_goal, N_goal), 0.3, color="darkgray", label="Absorbing States"))
+        axs[2].add_patch(Circle((M_goal, N_goal), 0.3, color="darkgray", label="Absorbing States"))
         for goal_state in absorbing_states[1:]:
             N_goal, M_goal = goal_state // N, goal_state % N
-            ax.add_patch(Circle((M_goal, N_goal), 0.3, color="darkgray"))
+            axs[2].add_patch(Circle((M_goal, N_goal), 0.3, color="darkgray"))
 
-        plt.legend(loc="lower left", bbox_to_anchor=(-0, -0.17), fancybox=True, shadow=True)
+        # axs[2].legend(loc="lower left", bbox_to_anchor=(-0, -0.17), fancybox=True, shadow=True)

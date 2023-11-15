@@ -39,37 +39,26 @@ def transition_matrix(N, M, p, absorbing_states):
                     T[s, a, neighbors[other_action]] += (1 - p) / 3
 
     # Make the transition matrix absorbing
-
     make_absorbing(absorbing_states, T)
 
     return T
 
 
-def insert_walls_into_transition_matrix(T, n_walls, absorbing_states, start_state=0):
+def insert_walls_into_T(T, wall_indices):
+
     """
-    Randomly inserts wall blocks into the transition matrix T.
+    Insert walls at predefined states into a transition matrix T.
 
     :param T: The transition matrix with shape (n_states, n_actions, n_states).
-    :param n_walls: The number of walls (cells with zero transition probability) to insert.
+    :param wall_indices: indices of the states where the walls should be inserted. Assumes that the indices are flattened.
     :return: The modified transition matrix with walls inserted.
     """
+
     n_states, n_actions, _ = T.shape
     T = T.copy()
 
-    # Enumerate all states that can have a wall (i.e. states with reward = 0 and not the start state)
-    # wall_candidates = np.where((absorbing_states) & (np.arange(n_states) != start_state))[0] #paul: changed R <= 0 to R == 0 to not insert
-    # rewards in states with negative reward
-    wall_candidates = np.delete(np.arange(n_states), absorbing_states)
-    wall_candidates = np.delete(wall_candidates, start_state)
-
-    # Ensure we're not inserting more walls than there are states.
-    n_walls = min(n_walls, len(wall_candidates))
-
-    # Randomly select states to turn into walls.
-    wall_states = np.random.choice(wall_candidates, size=n_walls, replace=False)
-
     # Set the transition probabilities into the wall states to zero.
-    for s in wall_states:
+    for s in wall_indices:
         for a in range(n_actions):
             # Zero out all transitions leading into the wall state.
             T[:, a, s] = 0
@@ -84,6 +73,35 @@ def insert_walls_into_transition_matrix(T, n_walls, absorbing_states, start_stat
             prob_sum = T[s, a].sum()
             if prob_sum > 0:
                 T[s, a] /= prob_sum
+
+    return T
+
+
+def insert_random_walls_into_transition_matrix(T, n_walls, absorbing_states, start_state=0):
+    """
+    Randomly inserts wall blocks into the transition matrix T.
+
+    :param T: The transition matrix with shape (n_states, n_actions, n_states).
+    :param n_walls: The number of walls (cells with zero transition probability) to insert.
+    :return: The modified transition matrix with walls inserted.
+    """
+    n_states, _, _ = T.shape
+    T = T.copy()
+
+    # Enumerate all states that can have a wall (i.e. states with reward = 0 and not the start state)
+    # wall_candidates = np.where((absorbing_states) & (np.arange(n_states) != start_state))[0] #paul: changed R <= 0 to R == 0 to not insert
+    # rewards in states with negative reward
+    wall_candidates = np.delete(np.arange(n_states), absorbing_states)
+    wall_candidates = np.delete(wall_candidates, start_state)
+
+    # Ensure we're not inserting more walls than there are states.
+    n_walls = min(n_walls, len(wall_candidates))
+
+    # Randomly select states to turn into walls.
+    wall_states = np.random.choice(wall_candidates, size=n_walls, replace=False)
+
+    #insert walls into transition matrix
+    T = insert_walls_into_T(T=T, wall_indices=wall_states)
 
     return T, wall_states
 
@@ -143,10 +161,8 @@ def get_candidate_environments(
     N,
     M,
     T_true,
-    # R,
-    goal_states,
-    randomize_start_state=False,
-) -> list[Environment]:
+    goal_states) -> list[Environment]:
+    
     envs = []
     # goal_states = np.where(R > 0)[0]
     possible_start_states = [0]
@@ -159,7 +175,7 @@ def get_candidate_environments(
         n_walls = np.random.randint(0, n_states // 2)
         start_state = np.random.choice(possible_start_states)
 
-        T_candidate, wall_states = insert_walls_into_transition_matrix(
+        T_candidate, wall_states = insert_random_walls_into_transition_matrix(
             T_true,
             n_walls=n_walls,
             absorbing_states=goal_states,
