@@ -1,3 +1,5 @@
+from typing import List
+
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
 import numpy as np
@@ -144,7 +146,7 @@ def plot_posterior_distribution(
 
         # plt.legend(loc="lower left", bbox_to_anchor=(-0, -0.17), fancybox=True, shadow=True)
 
-    img_2 = axs[2].imshow(posterior_samples_reward_variance, cmap=plt.cm.seismic, vmin = -np.max(np.abs(R_values)), vmax = np.max(np.abs(R_values)))
+    img_2 = axs[2].imshow(posterior_samples_reward_variance, cmap=plt.cm.seismic, vmin = 0)
     plt.colorbar(img_2, ax=axs[2])
     axs[2].set_title("Variance of Reward Samples")
     
@@ -156,3 +158,25 @@ def plot_posterior_distribution(
             axs[2].add_patch(Circle((M_goal, N_goal), 0.3, color="darkgray"))
 
         # axs[2].legend(loc="lower left", bbox_to_anchor=(-0, -0.17), fancybox=True, shadow=True)
+
+def make_traceplot(samples: List(ParamTuple), true_params: ParamTuple = None):
+
+    samples_p = [sample[0] for sample in samples]
+    samples_gamma = [sample[1] for sample in samples]
+    samples_R = [sample[2] for sample in samples]
+
+    fig, axs = plt.subplots(1,2, figsize = (15,5))
+    axs[0].plot(samples_p)
+    axs[0].set_title("Traceplot p, all iterations")
+    axs[0].set_xlabel("Iterations")
+    axs[0].axhline(true_params.p, label = "True $p$", c="green")
+
+
+    axs[1].plot(samples_gamma)
+    axs[1].set_title("Traceplot $\gamma$, all iterations")
+    axs[1].set_xlabel("Iterations")
+    axs[1].axhline(true_params.gamma, label = "True $\gamma$", c="green")
+
+
+    fig.legend(loc="upper right", fancybox=True, shadow=True)
+    fig.tight_layout()

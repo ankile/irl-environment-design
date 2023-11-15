@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 
-from ..constants import ParamTuple, StateTransition
+from ..constants import ParamTuple, StateTransition, beta_agent
 from ..make_environment import Environment, transition_matrix
 from ..optimization import soft_q_iteration
 
@@ -29,12 +29,17 @@ def expert_trajectory_likelihood(
     expert_trajectories: list[tuple[Environment, list[StateTransition]]],
     goal_states: np.array
 ) -> float:
+    
+    '''
+    Computes the likelihood of an expert trajectory according to a parameter sample.
+    '''
+
     log_likelihood = 0.0
 
     for env, trajectories in expert_trajectories:
-        T_agent = transition_matrix(env.N, env.M, p=parameter_sample.p, absorbing_states = goal_states)
+        T_agent = transition_matrix(env.N, env.M, p=parameter_sample.p, absorbing_states=goal_states)
         policy = soft_q_iteration(
-            parameter_sample.R, T_agent, gamma=parameter_sample.gamma, beta=20.0
+            parameter_sample.R, T_agent, gamma=parameter_sample.gamma, beta=beta_agent
         )
         for traj in trajectories:
             log_likelihood += compute_log_likelihood(env.T_true, policy, traj)
