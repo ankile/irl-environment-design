@@ -4,7 +4,7 @@ import numpy as np
 from scipy.stats import truncnorm
 from tqdm import trange
 
-from ..constants import ParamTuple, p_limits, gamma_limits, R_limits, StateTransition
+from ..constants import ParamTuple, p_limits, gamma_limits, R_limits, StateTransition, KnownParameter
 from .likelihood import expert_trajectory_likelihood
 from ..make_environment import Environment
 
@@ -84,7 +84,11 @@ def bayesian_parameter_learning(
     goal_states: np.array,
     n_states: int,
     previous_sample: ParamTuple = None,
+    known_parameter: str = None
 ):
+    if known_parameter:
+        assert known_parameter.name in ["p", "gamma", "R"], f'known_parameter must be in ["p", "gamma", "R"] while you gave {known_parameter}'
+    
     # Samples from the posterior
     posterior_samples: list[ParamTuple] = []
     n_accepted = 0
@@ -103,6 +107,12 @@ def bayesian_parameter_learning(
         proposed_parameter: ParamTuple = parameter_proposal_truncnorm(
             previous_sample, step_size=step_size
         )
+
+        #if we assume that R is known and we only learn gamma and p, we can overwrite the R samples with the true value of R
+        if known_parameter is not None:
+            if known_parameter.name == "R":
+                _proposed_parameter = ParamTuple(p=proposed_parameter.p, gamma=proposed_parameter.gamma, R=known_parameter.value)
+                proposed_parameter = _proposed_parameter
 
         likelihood = expert_trajectory_likelihood(
             proposed_parameter, expert_trajectories, goal_states

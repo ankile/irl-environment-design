@@ -1,5 +1,3 @@
-from typing import List
-
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
 import numpy as np
@@ -159,7 +157,7 @@ def plot_posterior_distribution(
 
         # axs[2].legend(loc="lower left", bbox_to_anchor=(-0, -0.17), fancybox=True, shadow=True)
 
-def make_traceplot(samples: List(ParamTuple), true_params: ParamTuple = None):
+def make_traceplot(samples: list[ParamTuple], true_params: ParamTuple = None):
 
     samples_p = [sample[0] for sample in samples]
     samples_gamma = [sample[1] for sample in samples]
