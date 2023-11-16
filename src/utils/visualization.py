@@ -134,9 +134,12 @@ def plot_posterior_distribution(
     posterior_samples_reward_variance = posterior_samples_reward_variance.reshape(N,M)
 
 
+    #plot mean of estimated rewards
     img_1 = axs[1].imshow(posterior_samples_reward_mean, cmap=plt.cm.seismic, vmin=np.min(R_values), vmax=np.max(R_values))
-    plt.colorbar(img_1, ax=axs[1])
+    if not true_params:
+        plt.colorbar(img_1, ax=axs[1])
     axs[1].set_title("Mean of Reward Samples")
+
 
     if absorbing_states is not None:
         N_goal, M_goal = absorbing_states[0] // N, absorbing_states[0] % N
@@ -145,20 +148,20 @@ def plot_posterior_distribution(
             N_goal, M_goal = goal_state // N, goal_state % N
             axs[1].add_patch(Circle((M_goal, N_goal), 0.3, color="darkgray"))
 
-        # plt.legend(loc="lower left", bbox_to_anchor=(-0, -0.17), fancybox=True, shadow=True)
 
-    img_2 = axs[2].imshow(posterior_samples_reward_variance, cmap=plt.cm.seismic, vmin = 0)
-    plt.colorbar(img_2, ax=axs[2])
-    axs[2].set_title("Variance of Reward Samples")
-    
-    if absorbing_states is not None:
-        N_goal, M_goal = absorbing_states[0] // N, absorbing_states[0] % N
-        axs[2].add_patch(Circle((M_goal, N_goal), 0.3, color="darkgray", label="Absorbing States"))
-        for goal_state in absorbing_states[1:]:
-            N_goal, M_goal = goal_state // N, goal_state % N
-            axs[2].add_patch(Circle((M_goal, N_goal), 0.3, color="darkgray"))
+    #plot the true rewards
+    if true_params:
+        img_2 = axs[2].imshow(np.reshape(true_params.R, (N,M)), cmap=plt.cm.seismic, vmin = 0)
+        plt.colorbar(img_2, ax=axs[2])
+        axs[2].set_title("True Rewards")
+        
+        if absorbing_states is not None:
+            N_goal, M_goal = absorbing_states[0] // N, absorbing_states[0] % N
+            axs[2].add_patch(Circle((M_goal, N_goal), 0.3, color="darkgray", label="Absorbing States"))
+            for goal_state in absorbing_states[1:]:
+                N_goal, M_goal = goal_state // N, goal_state % N
+                axs[2].add_patch(Circle((M_goal, N_goal), 0.3, color="darkgray"))
 
-        # axs[2].legend(loc="lower left", bbox_to_anchor=(-0, -0.17), fancybox=True, shadow=True)
 
 def make_traceplot(samples: list[ParamTuple], true_params: ParamTuple = None):
 

@@ -5,7 +5,7 @@ from scipy.stats import truncnorm
 from tqdm import trange
 
 from ..constants import ParamTuple, p_limits, gamma_limits, R_limits, StateTransition, KnownParameter
-from .likelihood import expert_trajectory_likelihood
+from .likelihood import expert_trajectory_log_likelihood
 from ..make_environment import Environment
 
 '''
@@ -98,7 +98,7 @@ def bayesian_parameter_learning(
     if previous_sample is None:
         previous_sample = prior_sample(n_states)
 
-    old_likelihood = expert_trajectory_likelihood(previous_sample, expert_trajectories, goal_states)
+    old_log_likelihood = expert_trajectory_log_likelihood(previous_sample, expert_trajectories, goal_states)
 
     it = trange(sample_size, desc="Posterior sampling", leave=False)
     for k in it:
@@ -114,21 +114,22 @@ def bayesian_parameter_learning(
                 _proposed_parameter = ParamTuple(p=proposed_parameter.p, gamma=proposed_parameter.gamma, R=known_parameter.value)
                 proposed_parameter = _proposed_parameter
 
-        likelihood = expert_trajectory_likelihood(
+        log_likelihood = expert_trajectory_log_likelihood(
             proposed_parameter, expert_trajectories, goal_states
         )
 
         # Check if we accept the proposal
-        p = likelihood  # We don't multiply by the prior because it's uniform
-        p_old = old_likelihood
-        quotient = p / p_old
+        p = log_likelihood  # We don't multiply by the prior because it's uniform
+        p_old = old_log_likelihood
+        quotient = np.exp(p)/np.exp(p_old)
+        # quotient = np.exp(p - p_old)
         if np.random.uniform(0, 1) < quotient:
             previous_sample = proposed_parameter
-            old_likelihood = likelihood
+            old_log_likelihood = log_likelihood
             n_accepted += 1
         posterior_samples.append(previous_sample)
 
-        # Based on current acceptance rates, adjust step size and n_steps
+        # # Based on current acceptance rates, adjust step size and n_steps
         acceptance_rate = n_accepted / (k + 1)
         if acceptance_rate > 0.25:
             step_size = round(min(1, step_size + 0.01), 3)
