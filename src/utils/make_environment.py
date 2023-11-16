@@ -10,6 +10,7 @@ def make_absorbing(absorbing_states, T: np.ndarray) -> None:
 
 
 def transition_matrix(N, M, p, absorbing_states):
+
     n_states = N * M
     n_actions = 4  # N, E, S, W
 

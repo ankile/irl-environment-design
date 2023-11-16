@@ -183,10 +183,13 @@ def make_traceplot(samples: list[ParamTuple], true_params: ParamTuple = None):
     fig.tight_layout()
 
 
-def plot_log_likelihood(param_values: ParamTuple, expert_trajectories: list[tuple[Environment, list[StateTransition]]], goal_states: list):
+def plot_log_likelihood(param_values: ParamTuple, 
+                        expert_trajectories: list[tuple[Environment, list[StateTransition]]], 
+                        goal_states: list
+                        ):
 
     '''
-    Plots the posterior distribution of $p$ or $\gamma$ holding the other parameters constant.
+    Plots the posterior distribution of $p$ and $\gamma$ holding the other parameters constant.
 
     Args:
     --param_values, ParamTuple: Containing the values for the posterior

@@ -2,7 +2,7 @@ import numpy as np
 import torch
 
 from ..constants import ParamTuple, StateTransition, beta_agent
-from ..make_environment import Environment, transition_matrix
+from ..make_environment import Environment, transition_matrix, insert_walls_into_T
 from ..optimization import soft_q_iteration
 
 '''
@@ -44,13 +44,14 @@ def expert_trajectory_log_likelihood(
 
     for env, trajectories in expert_trajectories:
         T_agent = transition_matrix(env.N, env.M, p=parameter_sample.p, absorbing_states=goal_states)
+        T_agent = insert_walls_into_T(T_agent, wall_indices=env.wall_states) #this is new
         policy = soft_q_iteration(
             parameter_sample.R, T_agent, gamma=parameter_sample.gamma, beta=beta_agent
         )
         for traj in trajectories:
             n_steps += 1
             log_likelihood += compute_log_likelihood(env.T_true, policy, traj)
-            
+
     if log_likelihood == -np.inf:
         print("log likelihood is negative infinity. sth is weird.")
 
