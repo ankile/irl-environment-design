@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
 import numpy as np
+import pandas as pd
 
 from .constants import ParamTuple, gamma_limits, p_limits, R_limits, StateTransition
 from .make_environment import Environment
@@ -163,27 +164,32 @@ def plot_posterior_distribution(
                 axs[2].add_patch(Circle((M_goal, N_goal), 0.3, color="darkgray"))
 
 
-def make_traceplot(samples: list[ParamTuple], true_params: ParamTuple = None):
+def mcmc_diagnostics(samples: list[ParamTuple], true_params: ParamTuple = None):
 
     samples_p = [sample[0] for sample in samples]
     samples_gamma = [sample[1] for sample in samples]
-    samples_R = [sample[2] for sample in samples]
 
-    fig, axs = plt.subplots(1,2, figsize = (15,5))
-    axs[0].plot(samples_p)
-    axs[0].set_title("Traceplot p, all iterations")
-    axs[0].set_xlabel("Iterations")
-    axs[0].axhline(true_params.p, label = "True $p$", c="green")
+    fig, axs = plt.subplots(2,2, figsize = (15,10))
+    axs[0,0].plot(samples_p)
+    axs[0,0].set_title("Traceplot p, all iterations")
+    axs[0,0].set_xlabel("Iterations")
+    axs[0,0].axhline(true_params.p, label = "True $p$", c="green")
 
 
-    axs[1].plot(samples_gamma)
-    axs[1].set_title("Traceplot $\gamma$, all iterations")
-    axs[1].set_xlabel("Iterations")
-    axs[1].axhline(true_params.gamma, label = "True $\gamma$", c="green")
+    axs[0,1].plot(samples_gamma)
+    axs[0,1].set_title("Traceplot $\gamma$, all iterations")
+    axs[0,1].set_xlabel("Iterations")
+    axs[0,1].axhline(true_params.gamma, label = "True $\gamma$", c="green")
 
+    axs[1,0].set_title("Autocorrelation $p$")
+    pd.plotting.autocorrelation_plot(samples_p, ax=axs[1,0])
+
+    axs[1,1].set_title("Autocorrelation $\gamma$")
+    pd.plotting.autocorrelation_plot(samples_p, ax=axs[1,1])
 
     fig.legend(loc="upper right", fancybox=True, shadow=True)
-    fig.tight_layout()
+
+
 
 
 def plot_log_likelihood(param_values: ParamTuple, 
