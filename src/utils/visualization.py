@@ -185,7 +185,7 @@ def mcmc_diagnostics(samples: list[ParamTuple], true_params: ParamTuple = None):
     pd.plotting.autocorrelation_plot(samples_p, ax=axs[1,0])
 
     axs[1,1].set_title("Autocorrelation $\gamma$")
-    pd.plotting.autocorrelation_plot(samples_p, ax=axs[1,1])
+    pd.plotting.autocorrelation_plot(samples_gamma, ax=axs[1,1])
 
     fig.legend(loc="upper right", fancybox=True, shadow=True)
 

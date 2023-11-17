@@ -122,10 +122,10 @@ def bayesian_parameter_learning(
 
         # # Based on current acceptance rates, adjust step size and n_steps
         acceptance_rate = n_accepted / (k + 1)
-        if acceptance_rate > 0.25:
-            step_size = round(min(1, step_size + 0.01), 3)
-        elif acceptance_rate < 0.21:
-            step_size = round(max(0.01, step_size - 0.01), 3)
+        # if acceptance_rate > 0.25:
+        #     step_size = round(min(1, step_size + 0.01), 3)
+        # elif acceptance_rate < 0.21:
+        #     step_size = round(max(0.01, step_size - 0.01), 3)
 
         it.set_postfix(
             {
