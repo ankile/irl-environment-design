@@ -1110,9 +1110,9 @@ if __name__ == "__main__":
     true_params = ParamTuple(agent_p, agent_gamma)
 
     # Run the experiment
-    n_env_samples = 12
-    n_posterior_samples = 2_00
-    n_traj_per_sample = 2
+    n_env_samples = 256
+    n_posterior_samples = 5_000
+    n_traj_per_sample = 10
 
     ## 0.2 Setup the environment
     N, M = 6, 6
