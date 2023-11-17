@@ -84,15 +84,16 @@ for episode in range(n_episodes):
         candidate_walls = get_environment_candidates(base_env, n_environment_samples)
 
         # First run bayesian reward learning for the walls from value objective
-        value_walls = bayesian_inf_and_env_search(
-            base_env,
-            n_reward_samples,
-            birl_sample_size,
-            value_obs,
-            episode,
-            candidate_walls,
-            "value",
-        )
+        # TODO: Uncomment this after debugging
+        # value_walls = bayesian_inf_and_env_search(
+        #     base_env,
+        #     n_reward_samples,
+        #     birl_sample_size,
+        #     value_obs,
+        #     episode,
+        #     candidate_walls,
+        #     "value",
+        # )
 
         # Then run bayesian reward learning for the walls from likelihood objective
         likelihood_walls = bayesian_inf_and_env_search(

@@ -49,17 +49,15 @@ def get_expert_trajectory(env):
 
 
 # get an expert trajectory leading to a goal states
-def get_expert_trajectory_alt(env):
+def get_expert_trajectory_alt(env, pol):
     env.reset()
     max_steps = 2 * env.width
     traj = []
-    V, Q, pol = value_iteration(env)
     for _ in range(max_steps):
         state = coordinate_to_scalar(env, env.agent_pos)
         # Boltzmann action selection
-        Q_exp = np.exp(30 * Q)
-        Q_boltz = Q_exp[state, :] / np.sum(Q_exp[state, :])
-        action = np.random.choice(env.action_space.n, p=Q_boltz)
+
+        action = np.random.choice(env.action_space.n, p=pol[state, :])
         # action = np.argmax(Q[state, :])
         obs, reward, done, info = env.step(action)
         next_state = coordinate_to_scalar(env, env.agent_pos)

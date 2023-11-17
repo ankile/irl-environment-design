@@ -8,6 +8,8 @@ from auxiliary.auxiliary import *
 from auxiliary.mdp_solver import *
 from random import sample  # random order in for-loops of VI
 
+from ipdb import set_trace as bp
+
 
 def domain_randomisation(env):
     # probability of a wall in a before empty cell
@@ -212,7 +214,6 @@ def evaluate_value_regret_of_maze(env, walls, s_reward, m_reward):
         regret += V[env.width + 1] / len(s_reward)
     maze.rewards = m_reward
     V_mean, Q, pol = value_iteration(maze)
-    print("pol", pol.shape)
 
     regret -= V_mean[env.width + 1]
 
@@ -281,10 +282,12 @@ def evaluate_likelihood_regret_of_maze(env, walls, s_reward, m_reward):
     for R in s_reward:
         # 4.1.1 Find the optimal policy for this env and posterior sample
         maze.rewards = R
-        _, Q, pol = value_iteration(maze)
+        _, Q, _ = value_iteration(maze)
+        Q_exp = np.exp(30 * Q)
+        pol = Q_exp / np.sum(Q_exp, axis=1, keepdims=True)
 
         # 4.1.2 Generate $m$ trajectories from this policy
-        policy_traj = [get_expert_trajectory_alt(env) for _ in range(2)]
+        policy_traj = [get_expert_trajectory_alt(maze, pol) for _ in range(2)]
         # 4.1.3 Calculate the likelihood of the trajectories
         policy_likelihoods = [
             compute_log_likelihood(T_true, pol, traj) for traj in policy_traj
