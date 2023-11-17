@@ -4,10 +4,9 @@ import numpy as np
 from scipy.stats import truncnorm
 from tqdm import trange
 
-from ..constants import ParamTuple, p_limits, gamma_limits, R_limits, StateTransition, KnownParameter
-from .likelihood import expert_trajectory_log_likelihood
-from ..make_environment import Environment
-
+from ...utils.constants import ParamTuple, p_limits, gamma_limits, R_limits, StepSizeTuple, StateTransition
+from ...utils.inference.likelihood import expert_trajectory_likelihood
+from ...utils.make_environment import Environment
 '''
 Functions for posterior sampling using Metropolis Hastings
 '''
@@ -38,9 +37,9 @@ def parameter_proposal(previous_sample: ParamTuple, step_size: float, n_states: 
     return ParamTuple(p, gamma, R)
 
 
-def parameter_proposal_truncnorm(
+def exp_parameter_proposal_truncnorm(
     previous_sample: ParamTuple,
-    step_size: float,
+    step_sizes: StepSizeTuple,
 ) -> ParamTuple:
     
     '''
@@ -54,14 +53,14 @@ def parameter_proposal_truncnorm(
 
     # Truncated normal distribution for p
     p_dist = get_truncated_normal(
-        mean=previous_sample.p, sd=step_size, low=p_limits[0], upp=p_limits[1]
+        mean=previous_sample.p, sd=step_sizes.p, low=p_limits[0], upp=p_limits[1]
     )
     p = p_dist.rvs()
 
     # Truncated normal distribution for gamma
     gamma_dist = get_truncated_normal(
         mean=previous_sample.gamma,
-        sd=step_size,
+        sd=step_sizes.gamma,
         low=gamma_limits[0],
         upp=gamma_limits[1],
     )
@@ -69,68 +68,115 @@ def parameter_proposal_truncnorm(
 
     # Truncated normal distribution for R
     R_dist = get_truncated_normal(
-        mean=previous_sample.R, sd=step_size, low=R_limits[0], upp=R_limits[1]
+        mean=previous_sample.R, sd=step_sizes.R, low=R_limits[0], upp=R_limits[1]
     )
     R = R_dist.rvs()
 
     return ParamTuple(p=p, gamma=gamma, R=R)
 
 
-def bayesian_parameter_learning(
+def exp_bayesian_parameter_learning(
     # TODO: Find an appropriate data structure for expert trajectories
     # It needs to account for the possibility of multiple trajectories per environment
     expert_trajectories: list[tuple[Environment, list[StateTransition]]],
     sample_size: int,
     goal_states: np.array,
     n_states: int,
-    previous_sample: ParamTuple = None
+    current_sample: ParamTuple = None,
 ):
-    
     # Samples from the posterior
     posterior_samples: list[ParamTuple] = []
-    n_accepted = 0
-    step_size = 0.1
+    
+    step_sizes = (0.1, 0.1, 0.1)
 
     # Start the chain at the previous sample if provided, otherwise sample from the prior
-    if previous_sample is None:
-        previous_sample = prior_sample(n_states)
+    if current_sample is None:
+        current_sample = prior_sample(n_states)
 
-    old_log_likelihood = expert_trajectory_log_likelihood(previous_sample, expert_trajectories, goal_states)
+        current_gamma = current_sample
+        current_p = current_sample
+        current_R = current_sample
+
+    n_accepted_gamma = 0
+    n_accepted_p = 0
+    n_accepted_R = 0
+
 
     it = trange(sample_size, desc="Posterior sampling", leave=False)
     for k in it:
 
         # Create a new proposal for (p_i, gamma_i)
-        proposed_parameter: ParamTuple = parameter_proposal_truncnorm(
-            previous_sample, step_size=step_size
+        proposed_parameter: ParamTuple = exp_parameter_proposal_truncnorm(
+            current_sample, step_sizes=step_sizes
         )
 
-        log_likelihood = expert_trajectory_log_likelihood(
-            proposed_parameter, expert_trajectories, goal_states
-        )
 
-        # Check if we accept the proposal
-        p = log_likelihood  # We don't multiply by the prior because it's uniform
-        p_old = old_log_likelihood
-        quotient = np.exp(p)/np.exp(p_old)
-        # quotient = np.exp(p - p_old)
-        if np.random.uniform(0, 1) < quotient:
-            previous_sample = proposed_parameter
-            old_log_likelihood = log_likelihood
-            n_accepted += 1
-        posterior_samples.append(previous_sample)
+        #now create 3 chains, one for each sample, e.g. each sample (gamma, p, R) is the proposed (gamma) and the previous (p,R)
+        proposed_gamma = ParamTuple(p=current_sample.p, gamma=proposed_parameter.gamma, R=current_sample.R)
+        proposed_p = ParamTuple(p=proposed_parameter.p, gamma=current_sample.gamma, R=current_sample.R)
+        proposed_R = ParamTuple(p=current_sample.p, gamma=current_sample.gamma, R=proposed_parameter.R)
 
-        # # Based on current acceptance rates, adjust step size and n_steps
-        acceptance_rate = n_accepted / (k + 1)
-        if acceptance_rate > 0.25:
-            step_size = round(min(1, step_size + 0.01), 3)
-        elif acceptance_rate < 0.21:
-            step_size = round(max(0.01, step_size - 0.01), 3)
+
+
+        def metropolis_hastings(proposed_sample, current_sample):
+            
+            likelihood_proposed = expert_trajectory_likelihood(
+                proposed_sample, expert_trajectories, goal_states
+            )
+
+            likelihood_current = expert_trajectory_likelihood(
+                current_sample, expert_trajectories, goal_states
+            )            
+
+            accepted = False
+            # Check if we accept the proposal
+            quotient = likelihood_proposed / likelihood_current
+            if np.random.uniform(0, 1) < quotient:
+                current_sample = proposed_sample
+                accepted = True
+
+            return current_sample, accepted
+        
+
+        
+        current_gamma, gamma_accepted = metropolis_hastings(proposed_gamma, current_gamma)
+        n_accepted_gamma += int(gamma_accepted)
+        acc_rate_gamma = n_accepted_gamma/(k+1)
+
+        current_p, p_accepted = metropolis_hastings(proposed_p, current_p)
+        n_accepted_p += int(p_accepted)
+        acc_rate_p = n_accepted_p/(k+1)
+
+        current_R, R_accepted = metropolis_hastings(proposed_R, current_R)
+        n_accepted_R += int(R_accepted)
+        acc_rate_R = n_accepted_R/(k+1)
+
+        current_sample = ParamTuple(p=current_p.p, gamma=current_gamma.gamma, R=current_R.R)
+
+        posterior_samples.append(current_sample)
+
+
+        def tune_stepsize_to_acc_rate(n_accepted, step_size):
+        # Based on current acceptance rates, adjust step size and n_steps
+            acceptance_rate = n_accepted / (k + 1)
+            if acceptance_rate > 0.25:
+                step_size = round(min(1, step_size + 0.01), 3)
+            elif acceptance_rate < 0.21:
+                step_size = round(max(0.01, step_size - 0.01), 3)
+
+            return step_size
+        
+        _step_size_p = tune_stepsize_to_acc_rate(n_accepted=n_accepted_p, step_size=_step_size_p)
+        _step_size_gamma = tune_stepsize_to_acc_rate(n_accepted=n_accepted_gamma, step_size=_step_size_gamma)
+        _step_size_R = tune_stepsize_to_acc_rate(n_accepted=n_accepted_R, step_size=_step_size_R)
+
+        step_sizes = StepSizeTuple(stepsize_p=_step_size_p, stepsize_gamma=_step_size_gamma, stepsize_R=_step_size_R)
 
         it.set_postfix(
             {
-                "Acceptance rate": round(100 * acceptance_rate, 1),
-                "step_size": step_size,
+                "Acceptance rate gamma": round(100 * acc_rate_gamma, 1),
+                "Acceptance rate p": round(100 * acc_rate_p, 1),
+                "Acceptance rate R": round(100 * acc_rate_R, 1),
             }
         )
 

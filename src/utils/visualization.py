@@ -1,8 +1,12 @@
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
 import numpy as np
+import pandas as pd
 
-from .constants import ParamTuple, gamma_limits, p_limits, R_limits
+from .constants import ParamTuple, gamma_limits, p_limits, R_limits, StateTransition
+from .make_environment import Environment
+from .inference.likelihood import expert_trajectory_log_likelihood
+
 
 def plot_trajectories(N, M, trajectories, reward_matrix, ax=None):
     if ax is None:
@@ -103,28 +107,27 @@ def plot_posterior_distribution(
     Plot the mean of the reward distribution as a grid
     """
     if ax is None:
-        fig, ax = plt.subplots(figsize=(6, 4))
+        fig, axs = plt.subplots(nrows = 1, ncols = 3, figsize = (15, 5))
     # Unzipping the list of tuples
     p_values, gamma_values, R_values = zip(*(posterior_samples))
 
     # Plotting the 2D distribution
-    ax.scatter(p_values, gamma_values, alpha=0.3)
-    ax.set_title("Posterior distribution over $\gamma$ and $p$")
-    ax.set_xlabel("$p_i$")
-    ax.set_ylabel("$\\gamma_i$")
-    ax.grid(True)
-    ax.set_xlim(p_limits)
-    ax.set_ylim(gamma_limits)
-
+    axs[0].scatter(p_values, gamma_values, alpha=0.3)
+    axs[0].set_title("Posterior distribution over $\gamma$ and $p$")
+    axs[0].set_xlabel("$p_i$")
+    axs[0].set_ylabel("$\\gamma_i$")
+    axs[0].grid(True)
+    axs[0].set_xlim(p_limits)
+    axs[0].set_ylim(gamma_limits)
     if true_params is not None:
-        ax.scatter(
-            true_params.p,
-            true_params.gamma,
-            marker="*",
-            color="red",
-            label="True parameters",
-        )
-        ax.legend()
+            axs[0].scatter(
+                true_params.p,
+                true_params.gamma,
+                marker="*",
+                color="red",
+                label="True parameters",
+            )
+            axs[0].legend()
 
     posterior_samples_reward_mean = np.mean(R_values, axis = 0)
     posterior_samples_reward_variance = np.var(R_values, axis=0)
@@ -132,32 +135,110 @@ def plot_posterior_distribution(
     posterior_samples_reward_variance = posterior_samples_reward_variance.reshape(N,M)
 
 
-    fig, ax = plt.subplots()
+    #plot mean of estimated rewards
+    img_1 = axs[1].imshow(posterior_samples_reward_mean, cmap=plt.cm.seismic, vmin=np.min(R_values), vmax=np.max(R_values))
+    if not true_params:
+        plt.colorbar(img_1, ax=axs[1])
+    axs[1].set_title("Mean of Reward Samples")
 
-    plt.imshow(posterior_samples_reward_mean, cmap=plt.cm.seismic, vmin=np.min(R_values), vmax=np.max(R_values))
-    plt.colorbar()
-    plt.title("Mean of Reward Samples")
 
     if absorbing_states is not None:
         N_goal, M_goal = absorbing_states[0] // N, absorbing_states[0] % N
-        ax.add_patch(Circle((M_goal, N_goal), 0.3, color="darkgray", label="Absorbing States"))
+        axs[1].add_patch(Circle((M_goal, N_goal), 0.3, color="darkgray", label="Absorbing States"))
         for goal_state in absorbing_states[1:]:
             N_goal, M_goal = goal_state // N, goal_state % N
-            ax.add_patch(Circle((M_goal, N_goal), 0.3, color="darkgray"))
+            axs[1].add_patch(Circle((M_goal, N_goal), 0.3, color="darkgray"))
 
-        plt.legend(loc="lower left", bbox_to_anchor=(-0, -0.17), fancybox=True, shadow=True)
 
-    fig, ax = plt.subplots()
+    #plot the true rewards
+    if true_params:
+        img_2 = axs[2].imshow(np.reshape(true_params.R, (N,M)), cmap=plt.cm.seismic, vmin = 0)
+        plt.colorbar(img_2, ax=axs[2])
+        axs[2].set_title("True Rewards")
+        
+        if absorbing_states is not None:
+            N_goal, M_goal = absorbing_states[0] // N, absorbing_states[0] % N
+            axs[2].add_patch(Circle((M_goal, N_goal), 0.3, color="darkgray", label="Absorbing States"))
+            for goal_state in absorbing_states[1:]:
+                N_goal, M_goal = goal_state // N, goal_state % N
+                axs[2].add_patch(Circle((M_goal, N_goal), 0.3, color="darkgray"))
 
-    plt.imshow(posterior_samples_reward_variance, cmap=plt.cm.seismic, vmin = -np.max(np.abs(R_values)), vmax = np.max(np.abs(R_values)))
-    plt.colorbar()
-    plt.title("Variance of Reward Samples")
-    
-    if absorbing_states is not None:
-        N_goal, M_goal = absorbing_states[0] // N, absorbing_states[0] % N
-        ax.add_patch(Circle((M_goal, N_goal), 0.3, color="darkgray", label="Absorbing States"))
-        for goal_state in absorbing_states[1:]:
-            N_goal, M_goal = goal_state // N, goal_state % N
-            ax.add_patch(Circle((M_goal, N_goal), 0.3, color="darkgray"))
 
-        plt.legend(loc="lower left", bbox_to_anchor=(-0, -0.17), fancybox=True, shadow=True)
+def mcmc_diagnostics(samples: list[ParamTuple], true_params: ParamTuple = None):
+
+    samples_p = [sample[0] for sample in samples]
+    samples_gamma = [sample[1] for sample in samples]
+
+    fig, axs = plt.subplots(2,2, figsize = (15,10))
+    axs[0,0].plot(samples_p)
+    axs[0,0].set_title("Traceplot p, all iterations")
+    axs[0,0].set_xlabel("Iterations")
+    axs[0,0].axhline(true_params.p, label = "True $p$", c="green")
+
+
+    axs[0,1].plot(samples_gamma)
+    axs[0,1].set_title("Traceplot $\gamma$, all iterations")
+    axs[0,1].set_xlabel("Iterations")
+    axs[0,1].axhline(true_params.gamma, label = "True $\gamma$", c="green")
+
+    axs[1,0].set_title("Autocorrelation $p$")
+    pd.plotting.autocorrelation_plot(samples_p, ax=axs[1,0])
+
+    axs[1,1].set_title("Autocorrelation $\gamma$")
+    pd.plotting.autocorrelation_plot(samples_p, ax=axs[1,1])
+
+    fig.legend(loc="upper right", fancybox=True, shadow=True)
+
+
+
+
+def plot_log_likelihood(param_values: ParamTuple, 
+                        expert_trajectories: list[tuple[Environment, list[StateTransition]]], 
+                        goal_states: list
+                        ):
+
+    '''
+    Plots the posterior distribution of $p$ and $\gamma$ holding the other parameters constant.
+
+    Args:
+    --param_values, ParamTuple: Containing the values for the posterior
+    --expert trajectories: list of tuples containing environments and their respective expert environments
+    --goal_states: list of goal states, flattened
+    '''
+    likelihoods = []
+
+    fig, axs = plt.subplots(1,2)
+
+    for gamma in np.linspace(0.5, 0.95): #only up to 0.95 because it gets unstable for higher gamma
+
+        proposed_parameter = ParamTuple(p=param_values.p, gamma=gamma, R=param_values.R)
+
+        likelihood = expert_trajectory_log_likelihood(
+            proposed_parameter, expert_trajectories, goal_states
+        )
+        likelihoods.append(likelihood)
+
+    axs[0].plot(np.linspace(0.5, 0.95), likelihoods, label="Posterior Distribution")
+    axs[0].set_title(f"Posterior Distribution over $\gamma$\n Using true values for $p$ and R")
+    axs[0].vlines(x=param_values.gamma, ymin=min(likelihoods),ymax = max(likelihoods), label="True $\gamma$", colors="green")
+    axs[0].set_xlabel("$\gamma$")
+    axs[0].set_ylabel("Log-Likelihood")
+
+
+    likelihoods = []
+
+    for p in np.linspace(0.5, 0.95):
+
+        proposed_parameter = ParamTuple(p=p, gamma=param_values.gamma, R=param_values.R)
+
+        likelihood = expert_trajectory_log_likelihood(
+            proposed_parameter, expert_trajectories, goal_states
+        )
+        likelihoods.append(likelihood)
+
+    axs[1].plot(np.linspace(0.5, 0.95), likelihoods, label="Posterior Distribution")
+    axs[1].set_title(f"Posterior Distribution over $p$\n Using true values for $\gamma$ and R")
+    axs[1].vlines(x=param_values.p, ymin=min(likelihoods),ymax = max(likelihoods), label="True $p$", colors="green")
+    axs[1].set_xlabel("$p$")
+    axs[1].set_ylabel("Log-Likelihood")
+    fig.legend(loc='center left', bbox_to_anchor=(1, 0.5))

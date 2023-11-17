@@ -5,6 +5,7 @@ from .make_environment import transition_matrix
 from .optimization import soft_q_iteration, grad_policy_maximization, value_iteration_with_policy
 from .inference.rollouts import generate_n_trajectories
 from .inference.likelihood import compute_log_likelihood
+from .constants import beta_agent
 
 
 def environment_search(
@@ -55,7 +56,7 @@ def environment_search(
             for p, gamma, R in posterior_samples:
                 # 4.1.1 Find the optimal policy for this env and posterior sample
                 T_agent = transition_matrix(N, M, p=p, absorbing_states=goal_states)
-                policy = soft_q_iteration(R, T_agent, gamma=gamma, beta=20.0)
+                policy = soft_q_iteration(R, T_agent, gamma=gamma, beta=beta_agent)
                 policies.append(policy)
 
                 # 4.1.2 Generate $m$ trajectories from this policy
