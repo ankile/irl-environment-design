@@ -40,7 +40,6 @@ def expert_trajectory_log_likelihood(
     '''
 
     log_likelihood = 0.0
-    n_steps = 1
 
     for env, trajectories in expert_trajectories:
         T_agent = transition_matrix(env.N, env.M, p=parameter_sample.p, absorbing_states=goal_states)
@@ -49,13 +48,12 @@ def expert_trajectory_log_likelihood(
             parameter_sample.R, T_agent, gamma=parameter_sample.gamma, beta=beta_agent
         )
         for traj in trajectories:
-            n_steps += 1
             log_likelihood += compute_log_likelihood(env.T_true, policy, traj)
 
     if log_likelihood == -np.inf:
         print("log likelihood is negative infinity. sth is weird.")
 
-    return log_likelihood/n_steps
+    return log_likelihood
 
 
 def expert_trajectory_likelihood(

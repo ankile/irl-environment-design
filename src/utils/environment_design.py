@@ -11,12 +11,12 @@ from .constants import beta_agent
 def environment_search(
     N,
     M,
-    how,
     goal_states,
     posterior_samples,
     n_traj_per_sample,
     candidate_envs,
     n_actions = 4,
+    how = "likelihood",
     return_sorted = True
 ):
     """

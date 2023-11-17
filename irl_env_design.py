@@ -24,8 +24,8 @@ np.set_printoptions(linewidth=160, precision=2)
 
 ParamTuple = namedtuple("ParamTuple", ["p", "gamma"])
 StateTransition = namedtuple("StateTransition", ["s", "a", "s_next"])
-p_limits = (0.5, 0.999)
-gamma_limits = (0.5, 0.999)
+p_limits = (0.5, 0.95)
+gamma_limits = (0.5, 0.95)
 
 
 def value_iteration_with_policy(
@@ -391,28 +391,61 @@ def run_likelihood_exp(small_reward=1, big_reward=4, N=3, M=3, seed=69):
     return likelihood_array
 
 
-def insert_walls_into_transition_matrix(T, n_walls, start_state=0):
+# def insert_walls_into_transition_matrix(T, n_walls, start_state=0):
+#     """
+#     Randomly inserts wall blocks into the transition matrix T.
+
+#     :param T: The transition matrix with shape (n_states, n_actions, n_states).
+#     :param n_walls: The number of walls (cells with zero transition probability) to insert.
+#     :return: The modified transition matrix with walls inserted.
+#     """
+#     n_states, n_actions, _ = T.shape
+#     T = T.copy()
+
+#     # Enumerate all states that can have a wall (i.e. states with reward = 0 and not the start state)
+#     wall_candidates = np.where((R <= 0) & (np.arange(n_states) != start_state))[0]
+
+#     # Ensure we're not inserting more walls than there are states.
+#     n_walls = min(n_walls, len(wall_candidates))
+
+#     # Randomly select states to turn into walls.
+#     wall_states = np.random.choice(wall_candidates, size=n_walls, replace=False)
+
+#     # Set the transition probabilities into the wall states to zero.
+#     for s in wall_states:
+#         for a in range(n_actions):
+#             # Zero out all transitions leading into the wall state.
+#             T[:, a, s] = 0
+
+#             # Zero out all transitions leading out of the wall state.
+#             T[s, a, :] = 0
+
+#     # After modifying the transition probabilities, we need to re-normalize the transition
+#     # probabilities for each state and action to ensure they still sum to 1.
+#     for s in range(n_states):
+#         for a in range(n_actions):
+#             prob_sum = T[s, a].sum()
+#             if prob_sum > 0:
+#                 T[s, a] /= prob_sum
+
+#     return T, wall_states
+
+
+def insert_walls_into_T(T, wall_indices):
+
     """
-    Randomly inserts wall blocks into the transition matrix T.
+    Insert walls at predefined states into a transition matrix T.
 
     :param T: The transition matrix with shape (n_states, n_actions, n_states).
-    :param n_walls: The number of walls (cells with zero transition probability) to insert.
+    :param wall_indices: indices of the states where the walls should be inserted. Assumes that the indices are flattened.
     :return: The modified transition matrix with walls inserted.
     """
+
     n_states, n_actions, _ = T.shape
     T = T.copy()
 
-    # Enumerate all states that can have a wall (i.e. states with reward = 0 and not the start state)
-    wall_candidates = np.where((R <= 0) & (np.arange(n_states) != start_state))[0]
-
-    # Ensure we're not inserting more walls than there are states.
-    n_walls = min(n_walls, len(wall_candidates))
-
-    # Randomly select states to turn into walls.
-    wall_states = np.random.choice(wall_candidates, size=n_walls, replace=False)
-
     # Set the transition probabilities into the wall states to zero.
-    for s in wall_states:
+    for s in wall_indices:
         for a in range(n_actions):
             # Zero out all transitions leading into the wall state.
             T[:, a, s] = 0
@@ -427,6 +460,35 @@ def insert_walls_into_transition_matrix(T, n_walls, start_state=0):
             prob_sum = T[s, a].sum()
             if prob_sum > 0:
                 T[s, a] /= prob_sum
+
+    return T
+
+
+def insert_random_walls_into_transition_matrix(T, n_walls, absorbing_states, start_state=0):
+    """
+    Randomly inserts wall blocks into the transition matrix T.
+
+    :param T: The transition matrix with shape (n_states, n_actions, n_states).
+    :param n_walls: The number of walls (cells with zero transition probability) to insert.
+    :return: The modified transition matrix with walls inserted.
+    """
+    n_states, _, _ = T.shape
+    T = T.copy()
+
+    # Enumerate all states that can have a wall (i.e. states with reward = 0 and not the start state)
+    # wall_candidates = np.where((absorbing_states) & (np.arange(n_states) != start_state))[0] #paul: changed R <= 0 to R == 0 to not insert
+    # rewards in states with negative reward
+    wall_candidates = np.delete(np.arange(n_states), absorbing_states)
+    wall_candidates = np.delete(wall_candidates, start_state)
+
+    # Ensure we're not inserting more walls than there are states.
+    n_walls = min(n_walls, len(wall_candidates))
+
+    # Randomly select states to turn into walls.
+    wall_states = np.random.choice(wall_candidates, size=n_walls, replace=False)
+
+    #insert walls into transition matrix
+    T = insert_walls_into_T(T=T, wall_indices=wall_states)
 
     return T, wall_states
 
@@ -525,8 +587,8 @@ def get_candidate_environments(
         n_walls = np.random.randint(0, n_states // 2)
         start_state = np.random.choice(possible_start_states)
 
-        T_candidate, wall_states = insert_walls_into_transition_matrix(
-            T_true, n_walls=n_walls, start_state=start_state
+        T_candidate, wall_states = insert_random_walls_into_transition_matrix(
+            T_true, n_walls=n_walls, start_state=start_state, absorbing_states=goal_states
         )
 
         # Check if we've already seen this wall configuration
@@ -731,6 +793,7 @@ def expert_trajectory_likelihood(
 
     for env, trajectories in expert_trajectories:
         T_agent = transition_matrix(env.N, env.M, p=parameter_sample.p, R=env.R)
+        T_agent = insert_walls_into_T(T=T_agent, wall_indices=env.wall_states)
         policy = soft_q_iteration(
             env.R, T_agent, gamma=parameter_sample.gamma, beta=20.0
         )

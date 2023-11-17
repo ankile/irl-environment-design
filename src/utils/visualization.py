@@ -198,47 +198,44 @@ def plot_log_likelihood(param_values: ParamTuple,
                         ):
 
     '''
-    Plots the posterior distribution of $p$ and $\gamma$ holding the other parameters constant.
+    Plots the posterior distribution of $p$ and $\gamma$ holding R constant.
 
     Args:
     --param_values, ParamTuple: Containing the values for the posterior
     --expert trajectories: list of tuples containing environments and their respective expert environments
     --goal_states: list of goal states, flattened
     '''
-    likelihoods = []
 
-    fig, axs = plt.subplots(1,2)
+    fig, axs = plt.subplots()
+    n_samples_per_axis = 15
 
-    for gamma in np.linspace(0.5, 0.95): #only up to 0.95 because it gets unstable for higher gamma
+    gammas = np.linspace(0.5, 0.95, n_samples_per_axis)
+    ps = np.linspace(0.5, 0.95, n_samples_per_axis)
 
-        proposed_parameter = ParamTuple(p=param_values.p, gamma=gamma, R=param_values.R)
+    likelihoods = np.zeros(shape = (n_samples_per_axis, n_samples_per_axis))
 
-        likelihood = expert_trajectory_log_likelihood(
-            proposed_parameter, expert_trajectories, goal_states
-        )
-        likelihoods.append(likelihood)
+    for idx_p, p in enumerate(ps):
+        for idx_gamma, gamma in enumerate(gammas): #only up to 0.95 because it gets unstable for higher gamma
 
-    axs[0].plot(np.linspace(0.5, 0.95), likelihoods, label="Posterior Distribution")
-    axs[0].set_title(f"Posterior Distribution over $\gamma$\n Using true values for $p$ and R")
-    axs[0].vlines(x=param_values.gamma, ymin=min(likelihoods),ymax = max(likelihoods), label="True $\gamma$", colors="green")
-    axs[0].set_xlabel("$\gamma$")
-    axs[0].set_ylabel("Log-Likelihood")
+            proposed_parameter = ParamTuple(p=p, gamma=gamma, R=param_values.R)
+
+            likelihood = expert_trajectory_log_likelihood(
+                proposed_parameter, expert_trajectories, goal_states
+            )
+            likelihoods[idx_p, idx_gamma] = likelihood
 
 
-    likelihoods = []
+    index_p_true = (np. abs(ps - param_values.p)). argmin()
+    index_gamma_true = (np. abs(gammas - param_values.gamma)). argmin()
 
-    for p in np.linspace(0.5, 0.95):
-
-        proposed_parameter = ParamTuple(p=p, gamma=param_values.gamma, R=param_values.R)
-
-        likelihood = expert_trajectory_log_likelihood(
-            proposed_parameter, expert_trajectories, goal_states
-        )
-        likelihoods.append(likelihood)
-
-    axs[1].plot(np.linspace(0.5, 0.95), likelihoods, label="Posterior Distribution")
-    axs[1].set_title(f"Posterior Distribution over $p$\n Using true values for $\gamma$ and R")
-    axs[1].vlines(x=param_values.p, ymin=min(likelihoods),ymax = max(likelihoods), label="True $p$", colors="green")
-    axs[1].set_xlabel("$p$")
-    axs[1].set_ylabel("Log-Likelihood")
-    fig.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+    im = axs.imshow(
+        likelihoods, cmap="viridis", origin="upper"
+    )
+    plt.colorbar(im, orientation="vertical")
+    axs.set_xlabel("p")
+    axs.set_ylabel("$\gamma$")
+    axs.set_xticks(np.arange(n_samples_per_axis), np.round(ps, 2))
+    axs.set_yticks(np.arange(n_samples_per_axis), np.round(gammas, 2))
+    axs.set_title(f"Posterior log-likelihood over $p$ and $\gamma$ using true $R$\nTrue values = {(param_values.p, param_values.gamma)}")
+    plt.plot(index_p_true, index_gamma_true, "og", label = "True Values")
+    axs.legend()

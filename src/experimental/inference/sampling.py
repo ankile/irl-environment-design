@@ -87,7 +87,10 @@ def exp_bayesian_parameter_learning(
     # Samples from the posterior
     posterior_samples: list[ParamTuple] = []
     
-    step_sizes = (0.1, 0.1, 0.1)
+    step_sizes = StepSizeTuple(p=0.1, gamma=0.1, R=0.1)
+    _step_size_p = step_sizes.p
+    _step_size_gamma = step_sizes.gamma
+    _step_size_R = step_sizes.R
 
     # Start the chain at the previous sample if provided, otherwise sample from the prior
     if current_sample is None:
@@ -170,7 +173,7 @@ def exp_bayesian_parameter_learning(
         _step_size_gamma = tune_stepsize_to_acc_rate(n_accepted=n_accepted_gamma, step_size=_step_size_gamma)
         _step_size_R = tune_stepsize_to_acc_rate(n_accepted=n_accepted_R, step_size=_step_size_R)
 
-        step_sizes = StepSizeTuple(stepsize_p=_step_size_p, stepsize_gamma=_step_size_gamma, stepsize_R=_step_size_R)
+        step_sizes = StepSizeTuple(p=_step_size_p, gamma=_step_size_gamma, R=_step_size_R)
 
         it.set_postfix(
             {
