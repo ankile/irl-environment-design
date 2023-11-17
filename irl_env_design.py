@@ -1096,7 +1096,7 @@ def environment_design_experiment(
 
         # If we have a save path, save a figure with the environment, trajectories, and posterior
         if result_save_path is not None:
-            save_env_regret_plots(i, envs, result_save_path)
+            # save_env_regret_plots(i, envs, result_save_path)
             save_env_traj_posterior_plots(
                 i, env, posterior_samples, true_params, result_save_path
             )
