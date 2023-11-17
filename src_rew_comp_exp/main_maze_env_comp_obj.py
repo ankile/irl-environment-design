@@ -13,10 +13,13 @@ from random import sample
 # Experiment parameters
 size = 9
 base_env = ConstructedMazeEnv(size=size)
-n_environment_samples = 100
-n_reward_samples = 100
+state_space_n = base_env.state_space.n
+gamma = base_env.gamma
+
+n_environment_samples = 10
+n_reward_samples = 500
 uniform_samples = [np.random.uniform(0, 1, size**2) for _ in range(n_reward_samples)]
-birl_sample_size = 5_000
+birl_sample_size = 5_00
 n_episodes = 3
 obs_per_eps = 2
 
@@ -26,13 +29,12 @@ value_obs = []
 likelihood_obs = []
 
 regret_funcs = {
-    "value": evaluate_value_regret_of_maze,
+    "value": evaluate_value_regret_of_maze_alt,
     "likelihood": evaluate_likelihood_regret_of_maze,
 }
 
 
 def bayesian_inf_and_env_search(
-    base_env,
     n_reward_samples,
     birl_sample_size,
     value_obs,
@@ -46,20 +48,28 @@ def bayesian_inf_and_env_search(
         posterior_map,
         posterior_std,
     ) = bayesian_reward_learning(
-        base_env, value_obs, birl_sample_size, proposal_distr="grid"
+        state_space_n, value_obs, birl_sample_size, proposal_distr="grid"
     )
     s_reward = sample(posterior_samples[-5000:], n_reward_samples)
     plot_heatmaps(
         posterior_mean, posterior_std, episode=episode, regret_type=regret_type
     )
     m_reward = sum(s_reward) / len(s_reward)
+    Ps = []
+    for walls in candidate_walls:
+        env = ConstructedMazeEnv(size=size, walls=walls)
+        P = env.P
+        Ps.append(P)
+        env.close()
 
-    bayes_regret = evaluate_regret_for_candidates(
-        base_env,
-        s_reward,
-        m_reward,
-        candidate_walls,
-        regret_func=regret_funcs[regret_type],
+    # bayes_regret = evaluate_regret_for_candidates(
+    bayes_regret = evaluate_regret_for_candidates_multiprocessing(
+        env_size=size,
+        s_reward=s_reward,
+        m_reward=m_reward,
+        gamma=gamma,
+        Ps=Ps,
+        # regret_func=regret_funcs[regret_type],
     )
 
     arg_max = np.argmax(bayes_regret)
@@ -85,7 +95,6 @@ for episode in range(n_episodes):
 
         # First run bayesian reward learning for the walls from value objective
         value_walls = bayesian_inf_and_env_search(
-            base_env,
             n_reward_samples,
             birl_sample_size,
             value_obs,
@@ -94,16 +103,16 @@ for episode in range(n_episodes):
             "value",
         )
 
-        # Then run bayesian reward learning for the walls from likelihood objective
-        likelihood_walls = bayesian_inf_and_env_search(
-            base_env,
-            n_reward_samples,
-            birl_sample_size,
-            likelihood_obs,
-            episode,
-            candidate_walls,
-            "likelihood",
-        )
+        # # Then run bayesian reward learning for the walls from likelihood objective
+        # likelihood_walls = bayesian_inf_and_env_search(
+        #     base_env,
+        #     n_reward_samples,
+        #     birl_sample_size,
+        #     likelihood_obs,
+        #     episode,
+        #     candidate_walls,
+        #     "likelihood",
+        # )
 
     value_env = ConstructedMazeEnv(size=size, walls=value_walls)
     likelihood_env = ConstructedMazeEnv(size=size, walls=likelihood_walls)
@@ -126,7 +135,7 @@ for episode in range(n_episodes):
     posterior_map,
     posterior_std,
 ) = bayesian_reward_learning(
-    base_env, value_obs, birl_sample_size, proposal_distr="grid"
+    state_space_n, value_obs, birl_sample_size, proposal_distr="grid"
 )
 plot_heatmaps(posterior_mean, posterior_std, episode=n_episodes, regret_type="value")
 
@@ -136,7 +145,7 @@ plot_heatmaps(posterior_mean, posterior_std, episode=n_episodes, regret_type="va
     posterior_map,
     posterior_std,
 ) = bayesian_reward_learning(
-    base_env, likelihood_obs, birl_sample_size, proposal_distr="grid"
+    state_space_n, likelihood_obs, birl_sample_size, proposal_distr="grid"
 )
 plot_heatmaps(
     posterior_mean, posterior_std, episode=n_episodes, regret_type="likelihood"

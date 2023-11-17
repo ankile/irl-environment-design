@@ -220,6 +220,22 @@ def evaluate_value_regret_of_maze(env, walls, s_reward, m_reward):
     return regret
 
 
+# Evaluate Bayesian regret of environment w.r.t. sampled rewards and posterior mean
+def evaluate_value_regret_of_maze_alt(
+    env_size: int, P: list, gamma: float, s_reward: np.ndarray, m_reward: np.ndarray
+) -> float:
+    regret = 0
+    print("In evaluate_value_regret_of_maze_alt")
+    for reward in s_reward:
+        V, Q, pol = value_iteration_alt(P, reward, gamma)
+        regret += V[env_size + 1] / len(s_reward)
+    V_mean, Q, pol = value_iteration_alt(P, m_reward, gamma)
+
+    regret -= V_mean[env_size + 1]
+
+    return regret
+
+
 def compute_log_likelihood(T, policy, trajectory):
     log_likelihood = 0.0
     for s, a, next_s in trajectory[:-1]:
@@ -271,11 +287,11 @@ def grad_policy_maximization(
     return policy.numpy()
 
 
-def evaluate_likelihood_regret_of_maze(env, walls, s_reward, m_reward):
+def evaluate_likelihood_regret_of_maze(env_size, walls, s_reward, m_reward):
     trajectories = []
     likelihoods = []
 
-    maze = ConstructedMazeEnv(size=env.width, walls=walls)
+    maze = ConstructedMazeEnv(size=env_size, walls=walls)
 
     T_true = maze.P
 
@@ -298,8 +314,8 @@ def evaluate_likelihood_regret_of_maze(env, walls, s_reward, m_reward):
         likelihoods += policy_likelihoods
 
     # 4.2 Find the policy with the highest likelihood
-    n_states = env.state_space.n
-    n_actions = env.action_space.n
+    n_states = maze.state_space.n
+    n_actions = maze.action_space.n
     most_likely_policy = grad_policy_maximization(
         n_states=n_states,
         n_actions=n_actions,
@@ -346,32 +362,57 @@ def evaluate_regret_for_candidates(
 
 
 # Brute force, but in parallel 😎
-# from multiprocessing import Pool
-# from tqdm import tqdm
+import multiprocessing
+from tqdm import tqdm
+from functools import partial
 
 
-# def evaluate_single_case(args):
-#     env, walls, s_reward, m_reward = args
-#     return evaluate_regret_of_maze(env, walls, s_reward, m_reward)
+# Function to be executed in parallel
+def evaluate_single_candidate(args):
+    # P, env_size, gamma, s_reward, m_reward = args
+
+    print("In evaluate_single_candidate", args)
+    return 1
+
+    return evaluate_value_regret_of_maze_alt(env_size, P, gamma, s_reward, m_reward)
 
 
-# def brute_force_maze_design(env, s_reward, m_reward, candidate_size, num_processes=4):
-#     candidate_walls = get_environment_candidates(env, candidate_size)
+# Updated brute force function with multiprocessing
+def evaluate_regret_for_candidates_multiprocessing(
+    env_size: int,
+    s_reward,
+    m_reward,
+    gamma: float,
+    Ps,
+    # regret_func,
+):
+    # Number of processes to use
+    # num_processes = multiprocessing.cpu_count()
+    num_processes = 1
 
-#     # Create a pool of workers and map the evaluation function over the candidates
-#     with Pool(processes=num_processes) as pool:
-#         results = list(
-#             tqdm(
-#                 pool.imap(
-#                     evaluate_single_case,
-#                     [(env, w, s_reward, m_reward) for w in candidate_walls],
-#                 ),
-#                 total=len(candidate_walls),
-#             )
-#         )
+    print(f"Using {num_processes} processes")
 
-#     bayes_regret = results
-#     return candidate_walls, bayes_regret
+    print("Len of candidate walls", len(Ps))
+
+    args = [(P.copy(), env_size, gamma, s_reward.copy(), m_reward.copy()) for P in Ps]
+
+    # Setting up a pool of processes
+    # with multiprocessing.Pool(processes=num_processes) as pool:
+    # Map the candidate walls to the evaluation function
+    print("Starting multiprocessing")
+    bayes_regret = list(
+        tqdm(
+            # pool.imap(evaluate_single_candidate, [1, 2, 3, 4]),
+            map(evaluate_single_candidate, [1, 2, 3, 4]),
+            total=len(Ps),
+            desc="Brute Force",
+        )
+    )
+
+    print("Finished multiprocessing")
+    print("Bayes regret", len(bayes_regret))
+
+    return bayes_regret
 
 
 """ Regret-based environment design via extended value iteration. """

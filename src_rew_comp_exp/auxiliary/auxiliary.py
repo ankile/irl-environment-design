@@ -24,7 +24,7 @@ def get_expert_trajectory(env):
     traj = []
     V, Q, pol = value_iteration(env)
     for _ in range(max_steps):
-        env.render()
+        # env.render()
         state = coordinate_to_scalar(env, env.agent_pos)
         # Boltzmann action selection
         Q_exp = np.exp(30 * Q)
@@ -35,11 +35,11 @@ def get_expert_trajectory(env):
         traj.append([state, action])
         # traj.append([state, action])
         if done:
-            env.render()
-            # state = coordinate_to_scalar(env, env.agent_pos)
-            # action = np.argmax(Q[state, :])
-            # traj.append([state, action])
-            time.sleep(1)
+            # env.render()
+            # # state = coordinate_to_scalar(env, env.agent_pos)
+            # # action = np.argmax(Q[state, :])
+            # # traj.append([state, action])
+            # time.sleep(1)
             print("Trajectory Finished")
             break
     print(traj)

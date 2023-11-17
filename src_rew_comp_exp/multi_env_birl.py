@@ -11,7 +11,7 @@ from auxiliary.mdp_solver import *
 
 # observations is a sequence of pairs [env, traj], where env is a gym object and traj is a sequence of state-action pairs.
 def bayesian_reward_learning(
-    base_env,
+    state_space_n: int,
     observations,
     sample_size,
     proposal_distr="grid",
@@ -42,14 +42,14 @@ def bayesian_reward_learning(
     n_steps = 100
     if last_reward is None:
         if proposal_distr == "grid":
-            last_reward = grid_prior(base_env)
+            last_reward = grid_prior(state_space_n)
         elif proposal_distr == "simplex":
-            last_reward = simplex_prior(base_env)
+            last_reward = simplex_prior(state_space_n)
     old_likelihood, old_scales = get_likelihood(last_reward, compact_obs, beta=beta)
     for k in trange(sample_size, desc="BIRL"):
         if proposal_distr == "grid":
             proposed_reward, pdf_proposal = grid_proposal(
-                env, last_reward, step_size=step_size
+                state_space_n, last_reward, step_size=step_size
             )
         elif proposal_distr == "simplex":
             proposed_reward, pdf_proposal = simplex_proposal(
@@ -141,14 +141,14 @@ def simplex_proposal(last_reward, n_steps=100):
     return proposed_reward, pdf_proposal
 
 
-def grid_prior(env):
-    return np.random.randint(1, 10, size=env.state_space.n) / 10
+def grid_prior(state_space_n):
+    return np.random.randint(1, 10, size=state_space_n) / 10
 
 
-def grid_proposal(env, last_reward, step_size):
+def grid_proposal(state_space_n, last_reward, step_size):
     proposed_reward = last_reward.copy()
     step = np.random.choice(
-        [-step_size, 0, step_size], env.state_space.n, p=(0.15, 0.7, 0.15)
+        [-step_size, 0, step_size], state_space_n, p=(0.15, 0.7, 0.15)
     )
     proposed_reward += step
     # print(step[0:10])
