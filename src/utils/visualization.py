@@ -234,7 +234,7 @@ def plot_log_likelihood(param_values: ParamTuple,
     plt.colorbar(im, orientation="vertical")
     axs.set_xlabel("p")
     axs.set_ylabel("$\gamma$")
-    axs.set_xticks(np.arange(n_samples_per_axis), np.round(ps, 2))
+    axs.set_xticks(np.arange(n_samples_per_axis), np.round(ps, 2), rotation='vertical')
     axs.set_yticks(np.arange(n_samples_per_axis), np.round(gammas, 2))
     axs.set_title(f"Posterior log-likelihood over $p$ and $\gamma$ using true $R$\nTrue values = {(param_values.p, param_values.gamma)}")
     plt.plot(index_p_true, index_gamma_true, "og", label = "True Values")
