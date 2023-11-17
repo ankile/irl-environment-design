@@ -13,10 +13,10 @@ from random import sample
 # Experiment parameters
 size = 9
 base_env = ConstructedMazeEnv(size=size)
-n_environment_samples = 16
-n_reward_samples = 750
+n_environment_samples = 100
+n_reward_samples = 100
 uniform_samples = [np.random.uniform(0, 1, size**2) for _ in range(n_reward_samples)]
-birl_sample_size = 1_000
+birl_sample_size = 5_000
 n_episodes = 3
 obs_per_eps = 2
 
@@ -84,16 +84,15 @@ for episode in range(n_episodes):
         candidate_walls = get_environment_candidates(base_env, n_environment_samples)
 
         # First run bayesian reward learning for the walls from value objective
-        # TODO: Uncomment this after debugging
-        # value_walls = bayesian_inf_and_env_search(
-        #     base_env,
-        #     n_reward_samples,
-        #     birl_sample_size,
-        #     value_obs,
-        #     episode,
-        #     candidate_walls,
-        #     "value",
-        # )
+        value_walls = bayesian_inf_and_env_search(
+            base_env,
+            n_reward_samples,
+            birl_sample_size,
+            value_obs,
+            episode,
+            candidate_walls,
+            "value",
+        )
 
         # Then run bayesian reward learning for the walls from likelihood objective
         likelihood_walls = bayesian_inf_and_env_search(
