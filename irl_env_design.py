@@ -1,4 +1,5 @@
 from multiprocessing import Pool
+import os
 import numpy as np
 from numba import njit
 import matplotlib.pyplot as plt
@@ -412,6 +413,13 @@ def insert_walls_into_transition_matrix(T, n_walls, start_state=0):
     wall_states = np.random.choice(wall_candidates, size=n_walls, replace=False)
 
     # Set the transition probabilities into the wall states to zero.
+    T = insert_wall(T, n_states, n_actions, wall_states)
+
+    return T, wall_states
+
+
+def insert_wall(T, n_states, n_actions, wall_states):
+    T = T.copy()
     for s in wall_states:
         for a in range(n_actions):
             # Zero out all transitions leading into the wall state.
@@ -428,7 +436,7 @@ def insert_walls_into_transition_matrix(T, n_walls, start_state=0):
             if prob_sum > 0:
                 T[s, a] /= prob_sum
 
-    return T, wall_states
+    return T
 
 
 def plot_environment(reward_function, wall_states, start_state=(0, 0), ax=None):
@@ -569,11 +577,52 @@ def environment_search(
         (env, posterior_sample, n_traj_per_sample, N, M, R, T_true, absorbing_states)
         for env in candidate_envs
     ]
+    n_processes = os.cpu_count()
 
     # Parallel processing with multiprocessing and tqdm
-    with Pool(64) as pool:
+    with Pool(n_processes) as pool:
         candidate_envs = list(
             tqdm(pool.imap(process_candidate_env, args), total=len(args), leave=False)
+        )
+
+    # 5. Return the environments (ordered by regret, with higest regret first)
+    return sorted(candidate_envs, key=lambda env: env.regret, reverse=True)
+
+
+def environment_search_value(
+    N,
+    M,
+    R,
+    T_true,
+    n_env_samples,
+    posterior_sample,
+    n_traj_per_sample,
+) -> list[Environment]:
+    # Create the true transition matrix
+    absorbing_states = np.where(R != 0)[0]  # Absorbing states
+
+    # 2. Sample $n$ parameter tuples from the prior
+    # Now done outside of this function
+
+    # 3. Generate $m$ different candidate environments
+    candidate_envs = get_candidate_environments(
+        n_env_samples, N, M, T_true, R, randomize_start_state=False
+    )
+
+    args = [
+        (env, posterior_sample, n_traj_per_sample, N, M, R, T_true, absorbing_states)
+        for env in candidate_envs
+    ]
+    n_processes = os.cpu_count()
+
+    # Parallel processing with multiprocessing and tqdm
+    with Pool(n_processes) as pool:
+        candidate_envs = list(
+            tqdm(
+                pool.imap(process_candidate_env_value, args),
+                total=len(args),
+                leave=False,
+            )
         )
 
     # 5. Return the environments (ordered by regret, with higest regret first)
@@ -649,6 +698,83 @@ def process_candidate_env(args):
     candidate_env.regret = -np.diff(candidate_env.likelihoods).item()
 
     candidate_env.trajectories = trajectories
+
+    return candidate_env
+
+
+def policy_evaluation(policy, R, T_true, gamma, tol=1e-6):
+    """
+    Perform policy evaluation to calculate the value function for a given policy.
+
+    :param policy: Policy matrix, shape (n_states, n_actions).
+    :param R: Rewards vector, shape (n_states,).
+    :param T_true: Transition matrix, shape (n_states, n_actions, n_states).
+    :param gamma: Discount factor.
+    :param tol: Tolerance for convergence.
+    :return: Value function vector, shape (n_states,).
+    """
+    n_states, n_actions = policy.shape
+    V = np.zeros(n_states)
+
+    while True:
+        V_prev = np.copy(V)
+        for s in range(n_states):
+            V[s] = sum(
+                policy[s, a] * (R[s] + gamma * np.dot(T_true[s, a], V_prev))
+                for a in range(n_actions)
+            )
+
+        # Check for convergence
+        if np.max(np.abs(V - V_prev)) < tol:
+            break
+
+    return V
+
+
+def process_candidate_env_value(args):
+    (
+        candidate_env,
+        posterior_sample,
+        n_traj_per_sample,
+        N,
+        M,
+        R,
+        T_true,
+        absorbing_states,
+    ) = args
+    n_states, n_actions = N * M, 4
+
+    v_star = 0
+
+    for p, gamma in posterior_sample:
+        # 4.1.1 Find the optimal policy for this env and posterior sample
+        T_agent = transition_matrix(N, M, p=p, R=R)
+        T_agent = insert_wall(T_agent, n_states, n_actions, candidate_env.wall_states)
+        policy = soft_q_iteration(R, T_agent, gamma=gamma, beta=100.0)
+
+        value = policy_evaluation(policy, R, candidate_env.T_true, gamma)
+        v_star += value[0]
+
+    v_star /= len(posterior_sample)
+
+    # 4.2 Find the policy with the highest likelihood
+
+    # Find mean over each of the parameters
+    p_mean = np.mean([p for p, _ in posterior_sample])
+    gamma_mean = np.mean([gamma for _, gamma in posterior_sample])
+
+    T_agent = transition_matrix(N, M, p=p_mean, R=R)
+    T_agent = insert_wall(T_agent, n_states, n_actions, candidate_env.wall_states)
+    most_likely_policy = soft_q_iteration(R, T_agent, gamma=gamma_mean, beta=100.0)
+
+    candidate_env.max_likelihood_policy = most_likely_policy
+
+    # 4.3 Calculate the regret of the most likely policy
+    most_likely_value = policy_evaluation(
+        most_likely_policy, R, T_true, gamma=0.9, tol=1e-6
+    )
+
+    candidate_env.regret = v_star - most_likely_value[0]
 
     return candidate_env
 
@@ -741,8 +867,6 @@ def expert_trajectory_likelihood(
 
 
 def bayesian_parameter_learning(
-    # TODO: Find an appropriate data structure for expert trajectories
-    # It needs to account for the possibility of multiple trajectories per environment
     expert_trajectories: list[tuple[Environment, list[StateTransition]]],
     sample_size: int,
     previous_sample: ParamTuple = None,
@@ -925,7 +1049,7 @@ def environment_design_experiment(
         samples = [posterior_samples[i] for i in sample_idxs]
 
         # Find the env with the highest regret to observe the expert in
-        envs = environment_search(
+        envs = environment_search_value(
             base_env.N,
             base_env.M,
             base_env.R,
@@ -940,6 +1064,7 @@ def environment_design_experiment(
         env: Environment = sorted(envs, key=lambda x: x.regret, reverse=True)[0]
 
         T_agent = transition_matrix(env.N, env.M, p=true_params.p, R=env.R)
+        T_agent = insert_wall(T_agent, env.N * env.M, 4, env.wall_states)
         agent_policy = soft_q_iteration(
             env.R, T_agent, gamma=true_params.gamma, beta=20.0
         )
@@ -965,6 +1090,9 @@ def environment_design_experiment(
         )
         # Remove burn-in
         posterior_samples = posterior_samples[-1_000:]
+        env.trajectories = trajectories
+        env.likelihoods = []
+        env.log_likelihoods = []
 
         # If we have a save path, save a figure with the environment, trajectories, and posterior
         if result_save_path is not None:
@@ -982,9 +1110,9 @@ if __name__ == "__main__":
     true_params = ParamTuple(agent_p, agent_gamma)
 
     # Run the experiment
-    n_env_samples = 100
-    n_posterior_samples = 2_000
-    n_traj_per_sample = 20
+    n_env_samples = 12
+    n_posterior_samples = 2_00
+    n_traj_per_sample = 2
 
     ## 0.2 Setup the environment
     N, M = 6, 6
