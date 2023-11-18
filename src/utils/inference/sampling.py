@@ -4,9 +4,10 @@ import numpy as np
 from scipy.stats import truncnorm
 from tqdm import trange
 
-from ..constants import ParamTuple, p_limits, gamma_limits, R_limits, StateTransition, KnownParameter
+from ..constants import ParamTuple, p_limits, gamma_limits, R_limits, StateTransition, KnownParameter, beta_agent
 from .likelihood import expert_trajectory_log_likelihood
-from ..make_environment import Environment
+from ..make_environment import Environment, transition_matrix, insert_walls_into_T
+from ..optimization import soft_q_iteration
 
 '''
 Functions for posterior sampling using Metropolis Hastings
@@ -74,6 +75,25 @@ def parameter_proposal_truncnorm(
     R = R_dist.rvs()
 
     return ParamTuple(p=p, gamma=gamma, R=R)
+
+
+def parameter_proposal_mala(previous_sample: ParamTuple,
+                            step_size,
+                            expert_trajectories,
+                            goal_states) -> ParamTuple:
+    
+    grad = 0
+
+    for env, trajectories in expert_trajectories:
+        optimizer.zero_grad()
+        T_agent = transition_matrix(env.N, env.M, p=previous_sample.p, absorbing_states=goal_states)
+        T_agent = insert_walls_into_T(T_agent, wall_indices=env.wall_states) #this is new
+        policy = soft_q_iteration(
+            previous_sample.R, T_agent, gamma=previous_sample.gamma, beta=beta_agent
+        )
+
+    pass
+
 
 
 def bayesian_parameter_learning(

@@ -1,6 +1,7 @@
 from collections import deque
 
 import numpy as np
+import torch
 
 # @jit(nopython=True)
 def make_absorbing(absorbing_states, T: np.ndarray) -> None:

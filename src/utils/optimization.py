@@ -64,6 +64,40 @@ def soft_q_iteration(
 
     return policy
 
+def soft_q_iteration_torch(
+    R: torch.Tensor,  # R is a one-dimensional tensor with shape (n_states,)
+    T_agent: torch.Tensor,
+    gamma: float,
+    beta: float,  # Inverse temperature parameter for the softmax function
+    tol: float = 1e-6,
+) -> torch.Tensor:
+    n_states, n_actions, _ = T_agent.shape
+    V = torch.zeros(n_states)
+    Q = torch.zeros((n_states, n_actions))
+    policy = torch.zeros((n_states, n_actions))
+
+    while True:
+        for s in range(n_states):
+            for a in range(n_actions):
+                # Calculate the Q-value for action a in state s
+                Q[s, a] = R[s] + gamma * torch.dot(T_agent[s, a], V)
+
+        # Apply softmax to get a probabilistic policy
+        max_Q = torch.max(Q, axis=1, keepdim=True)[0]
+        exp_Q = torch.exp(beta * (Q - max_Q))  # Subtract max_Q for numerical stability
+        policy = exp_Q / torch.sum(exp_Q, axis=1, keepdim=True)
+
+        # Calculate the value function V using the probabilistic policy
+        V_new = torch.sum(policy * Q, axis=1)
+
+        # Check for convergence
+        if torch.max(torch.abs(V - V_new)) < tol:
+            break
+
+        V = V_new
+
+    return policy
+
 
 def grad_policy_maximization(
     n_states, n_actions, trajectories, T_true, beta=10, n_iter=1_000
