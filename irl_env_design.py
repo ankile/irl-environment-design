@@ -857,6 +857,7 @@ def expert_trajectory_likelihood(
 
     for env, trajectories in expert_trajectories:
         T_agent = transition_matrix(env.N, env.M, p=parameter_sample.p, R=env.R)
+        T_agent = insert_wall(T_agent, env.N * env.M, 4, env.wall_states)
         policy = soft_q_iteration(
             env.R, T_agent, gamma=parameter_sample.gamma, beta=20.0
         )
@@ -1049,7 +1050,8 @@ def environment_design_experiment(
         samples = [posterior_samples[i] for i in sample_idxs]
 
         # Find the env with the highest regret to observe the expert in
-        envs = environment_search_value(
+        # envs = environment_search_value(
+        envs = environment_search(
             base_env.N,
             base_env.M,
             base_env.R,
@@ -1110,8 +1112,8 @@ if __name__ == "__main__":
     true_params = ParamTuple(agent_p, agent_gamma)
 
     # Run the experiment
-    n_env_samples = 256
-    n_posterior_samples = 5_000
+    n_env_samples = 24
+    n_posterior_samples = 2_000
     n_traj_per_sample = 10
 
     ## 0.2 Setup the environment
