@@ -184,6 +184,11 @@ def non_blocking_domain_randomisation(env, prob=0.2):
 
 # get environment candidates
 def get_environment_candidates(env, size):
+    # Set all the seeds
+    np.random.seed(0)
+    random.seed(0)
+
+    # probability of a wall in a before empty cell
     candidates = []
     candidates.append([])  # adding empty maze
     candidates.append([[5, 1], [5, 2], [5, 3], [6, 3]])
@@ -222,10 +227,14 @@ def evaluate_value_regret_of_maze(env, walls, s_reward, m_reward):
 
 # Evaluate Bayesian regret of environment w.r.t. sampled rewards and posterior mean
 def evaluate_value_regret_of_maze_alt(
-    env_size: int, P: list, gamma: float, s_reward: np.ndarray, m_reward: np.ndarray
+    env_size: int,
+    P: list,
+    gamma: float,
+    s_reward: np.ndarray,
+    m_reward: np.ndarray,
+    walls: list,
 ) -> float:
     regret = 0
-    print("In evaluate_value_regret_of_maze_alt")
     for reward in s_reward:
         V, Q, pol = value_iteration_alt(P, reward, gamma)
         regret += V[env_size + 1] / len(s_reward)
@@ -243,8 +252,8 @@ def compute_log_likelihood(T, policy, trajectory):
     return log_likelihood
 
 
-def log_likelihood_torch(T, policy, trajectory):
-    log_likelihood = torch.tensor(0.0)
+def log_likelihood_torch(T, policy, trajectory, device="cpu"):
+    log_likelihood = torch.tensor(0.0, device=device)
     for s, a, next_s in trajectory[:-1]:
         log_likelihood += torch.log(T[s, a, next_s] * policy[s, a])
     return log_likelihood
@@ -253,11 +262,13 @@ def log_likelihood_torch(T, policy, trajectory):
 def grad_policy_maximization(
     n_states, n_actions, trajectories, T_true, beta=10, n_iter=1_000
 ):
-    Q = torch.zeros(n_states, n_actions, requires_grad=True)
+    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cpu")
+    Q = torch.zeros(n_states, n_actions, requires_grad=True, device=device)
 
     optimizer = torch.optim.Adam([Q], lr=0.1)
-    T_true = torch.tensor(T_true)
-    old_pi = torch.zeros(n_states, n_actions)
+    T_true = torch.tensor(T_true, device=device)
+    old_pi = torch.zeros(n_states, n_actions, device=device)
 
     for _ in range(n_iter):
         optimizer.zero_grad()
@@ -271,42 +282,47 @@ def grad_policy_maximization(
         policy = exp_Q / torch.sum(exp_Q, axis=1, keepdims=True)
 
         mean_log_likelihood = torch.stack(
-            [log_likelihood_torch(T_true, policy, traj) for traj in trajectories]
+            [
+                log_likelihood_torch(T_true, policy, traj, device=device)
+                for traj in trajectories
+            ]
         ).mean()
         (-mean_log_likelihood).backward()
         optimizer.step()
 
         # Check for convergence
-        if torch.max(torch.abs(policy - old_pi)) < 1e-3:
-            break
+        with torch.no_grad():
+            if torch.max(torch.abs(policy - old_pi)) < 1e-3:
+                break
 
-        old_pi = policy.detach()
+            old_pi = policy.detach()
 
     policy = torch.softmax(Q.detach(), dim=1)
 
-    return policy.numpy()
+    return policy.cpu().numpy()
 
 
-def evaluate_likelihood_regret_of_maze(env_size, walls, s_reward, m_reward):
+def evaluate_likelihood_regret_of_maze(
+    env_size: int, P: np.ndarray, gamma, s_reward, m_reward, walls: list
+):
     trajectories = []
     likelihoods = []
-
     maze = ConstructedMazeEnv(size=env_size, walls=walls)
 
-    T_true = maze.P
+    P = maze.P
 
     for R in s_reward:
         # 4.1.1 Find the optimal policy for this env and posterior sample
-        maze.rewards = R
-        _, Q, _ = value_iteration(maze)
+        _, Q, _ = value_iteration_alt(P, R, gamma)
         Q_exp = np.exp(30 * Q)
         pol = Q_exp / np.sum(Q_exp, axis=1, keepdims=True)
 
         # 4.1.2 Generate $m$ trajectories from this policy
         policy_traj = [get_expert_trajectory_alt(maze, pol) for _ in range(2)]
+
         # 4.1.3 Calculate the likelihood of the trajectories
         policy_likelihoods = [
-            compute_log_likelihood(T_true, pol, traj) for traj in policy_traj
+            compute_log_likelihood(P, pol, traj) for traj in policy_traj
         ]
 
         # 4.1.4 Store the trajectories and likelihoods
@@ -320,14 +336,13 @@ def evaluate_likelihood_regret_of_maze(env_size, walls, s_reward, m_reward):
         n_states=n_states,
         n_actions=n_actions,
         trajectories=trajectories,
-        T_true=T_true,
+        T_true=P,
         n_iter=100,
     )
 
     # 4.3 Calculate the regret of the most likely policy
     most_likely_likelihoods = [
-        compute_log_likelihood(T_true, most_likely_policy, traj)
-        for traj in trajectories
+        compute_log_likelihood(P, most_likely_policy, traj) for traj in trajectories
     ]
 
     all_likelihoods = np.array([likelihoods, most_likely_likelihoods]).T
@@ -353,11 +368,19 @@ def brute_force_maze_design(env, s_reward, m_reward, candidate_size):
 
 # brute force
 def evaluate_regret_for_candidates(
-    env, s_reward, m_reward, candidate_walls, regret_func
+    env_size,
+    s_reward,
+    m_reward,
+    gamma,
+    Ps,
+    walls,
+    regret_func,
 ):
     bayes_regret = []
-    for idx, walls in enumerate(tqdm(candidate_walls, desc="Brute Force")):
-        bayes_regret.append(regret_func(env, walls, s_reward, m_reward))
+    for P, wall in tqdm(
+        zip(Ps, walls), desc=f"Brute Force ({regret_func.__name__})", total=len(Ps)
+    ):
+        bayes_regret.append(regret_func(env_size, P, gamma, s_reward, m_reward, wall))
     return bayes_regret
 
 

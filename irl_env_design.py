@@ -526,8 +526,6 @@ def get_candidate_environments(
     possible_start_states = np.where(R == 0)[0] if randomize_start_state else [0]
     seen_walls = set()
 
-    pbar = tqdm(desc="Generating candidate environments", total=n_envs)
-
     while len(envs) < n_envs:
         # Sample random number of walls to insert
         n_walls = np.random.randint(0, n_states // 2)
@@ -548,7 +546,6 @@ def get_candidate_environments(
             continue
 
         envs.append(Environment(N, M, R, T_candidate, wall_states, start_state))
-        pbar.update(1)
 
     return envs
 
@@ -558,7 +555,7 @@ def environment_search(
     M,
     R,
     T_true,
-    n_env_samples,
+    candidate_envs,
     posterior_sample,
     n_traj_per_sample,
 ) -> list[Environment]:
@@ -569,9 +566,7 @@ def environment_search(
     # Now done outside of this function
 
     # 3. Generate $m$ different candidate environments
-    candidate_envs = get_candidate_environments(
-        n_env_samples, N, M, T_true, R, randomize_start_state=False
-    )
+    # Now done outside of this function
 
     args = [
         (env, posterior_sample, n_traj_per_sample, N, M, R, T_true, absorbing_states)
@@ -582,7 +577,11 @@ def environment_search(
     # Parallel processing with multiprocessing and tqdm
     with Pool(n_processes) as pool:
         candidate_envs = list(
-            tqdm(pool.imap(process_candidate_env, args), total=len(args), leave=False)
+            tqdm(
+                pool.imap(process_candidate_env, args),
+                total=len(args),
+                desc="Env search",
+            )
         )
 
     # 5. Return the environments (ordered by regret, with higest regret first)
@@ -594,7 +593,7 @@ def environment_search_value(
     M,
     R,
     T_true,
-    n_env_samples,
+    candidate_envs,
     posterior_sample,
     n_traj_per_sample,
 ) -> list[Environment]:
@@ -605,9 +604,7 @@ def environment_search_value(
     # Now done outside of this function
 
     # 3. Generate $m$ different candidate environments
-    candidate_envs = get_candidate_environments(
-        n_env_samples, N, M, T_true, R, randomize_start_state=False
-    )
+    # Now done outside of this function
 
     args = [
         (env, posterior_sample, n_traj_per_sample, N, M, R, T_true, absorbing_states)
@@ -1017,19 +1014,23 @@ def save_env_traj_posterior_plots(
     plt.close()
 
 
+environment_search_functions = {
+    "value": environment_search_value,
+    "likelihood": environment_search,
+}
+
+
 def environment_design_experiment(
     n_rounds: int,
     traj_per_round: int,
-    n_env_samples: int,
+    candidate_envs: list[Environment],
     n_posterior_samples: int,
     base_env: Environment,
     true_params: ParamTuple,
+    objective: str = "likelihood",
     result_save_path=None,
 ):
     if result_save_path is not None:
-        result_save_path = result_save_path / datetime.now().strftime(
-            "%Y-%m-%d_%H-%M-%S"
-        )
         result_save_path.mkdir(exist_ok=True, parents=True)
 
     expert_trajectories = []
@@ -1051,12 +1052,12 @@ def environment_design_experiment(
 
         # Find the env with the highest regret to observe the expert in
         # envs = environment_search_value(
-        envs = environment_search(
+        envs = environment_search_functions[objective](
             base_env.N,
             base_env.M,
             base_env.R,
             base_env.T_true,
-            n_env_samples,
+            candidate_envs,
             samples,
             traj_per_round,
         )
@@ -1107,16 +1108,12 @@ def environment_design_experiment(
 
 
 if __name__ == "__main__":
-    agent_p = 0.7
-    agent_gamma = 0.7
-    true_params = ParamTuple(agent_p, agent_gamma)
-
     # Run the experiment
-    n_env_samples = 24
+    n_env_samples = 512
     n_posterior_samples = 2_000
     n_traj_per_sample = 10
 
-    ## 0.2 Setup the environment
+    # 0.2 Setup the environment
     N, M = 6, 6
     n_states, n_actions = N * M, 4
 
@@ -1138,19 +1135,77 @@ if __name__ == "__main__":
     R[3, -3] = -1
     R = R.flatten()
 
-    p_true = 0.95
+    p_true = 0.99
     T_true = transition_matrix(N, M, p=p_true, R=R)
+
+    print(f"Using {os.cpu_count()} processes")
 
     base_env = Environment(N, M, R, T_true, wall_states=[])
 
-    result_save_path = Path("results")
-
-    expert_trajectories, posterior_samples = environment_design_experiment(
-        n_rounds=3,
-        traj_per_round=2,
-        n_env_samples=n_env_samples,
-        n_posterior_samples=n_posterior_samples,
-        base_env=base_env,
-        true_params=true_params,
-        result_save_path=result_save_path,
+    agent_p = 0.7
+    agent_gamma = 0.7
+    result_base_path = (
+        Path("results") / "comparison" / datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     )
+    result_base_path.mkdir(exist_ok=True, parents=True)
+
+    f = open(result_base_path / "experiment_log.csv", "w")
+    # Write the header row
+    f.write("round_idx,agent_p,agent_gamma,objective,p_variance,gamma_variance\n")
+
+    # Make sure the file is written to disk
+    f.flush()
+
+    variances = {
+        "value": list(),
+        "likelihood": list(),
+    }
+
+    candidate_envs = get_candidate_environments(
+        n_env_samples, N, M, T_true, R, randomize_start_state=False
+    )
+
+    # The list of true parameters to test our approaches for
+    true_params_list = [
+        (0.55, 0.55),
+        (0.6, 0.9),
+        (0.9, 0.6),
+        (0.9, 0.9),
+        (0.99, 0.99),
+        (0.99, 0.55),
+        (0.75, 0.75),
+    ]
+    it = tqdm(true_params_list, desc="Running comparison")
+
+    for round_idx, (agent_p, agent_gamma) in enumerate(it, start=1):
+        true_params = ParamTuple(agent_p, agent_gamma)
+
+        for objective, variances_list in variances.items():
+            it.set_description(f"Running ({agent_p}, {agent_gamma}) - {objective}")
+            result_save_path = result_base_path / f"{agent_p}-{agent_gamma}" / objective
+            result_save_path.mkdir(exist_ok=True, parents=True)
+
+            expert_trajectories, posterior_samples = environment_design_experiment(
+                n_rounds=3,
+                traj_per_round=2,
+                candidate_envs=candidate_envs,
+                n_posterior_samples=n_posterior_samples,
+                base_env=base_env,
+                true_params=true_params,
+                objective=objective,
+                result_save_path=result_save_path,
+            )
+
+            # Calculate the variance of the posterior samples
+            p_values, gamma_values = zip(*posterior_samples)
+            variances_list.append((np.var(p_values), np.var(gamma_values)))
+
+            # Write the results to disk
+            f.write(
+                f"{round_idx},{agent_p},{agent_gamma},{objective},{np.var(p_values)},{np.var(gamma_values)}\n"
+            )
+
+            # Make sure the file is written to disk
+            f.flush()
+
+    f.close()

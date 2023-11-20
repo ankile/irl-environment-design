@@ -1,10 +1,15 @@
 import math
+from pathlib import Path
 from auxiliary.mdp_solver import *
 import time
 import seaborn as sns
 import matplotlib.pylab as plt
+from datetime import datetime
 
-folder_no = ""
+folder_no = Path("plots") / datetime.now().strftime("%Y%m%d-%H%M%S")
+folder_no.mkdir(parents=True, exist_ok=True)
+
+folder_no = str(folder_no)
 
 
 # translate 2-dim coordinates to scalar states
@@ -89,7 +94,7 @@ def plot_heatmaps(posterior_mean, posterior_std, episode=0, regret_type=""):
         regret_type = "_" + regret_type
 
     plt.savefig(
-        "plots" + folder_no + "/" + str(episode) + regret_type + "_posterior_mean.png",
+        folder_no + "/" + str(episode) + regret_type + "_posterior_mean.png",
         bbox_inches="tight",
     )
     plt.close()
@@ -105,7 +110,7 @@ def plot_heatmaps(posterior_mean, posterior_std, episode=0, regret_type=""):
         cbar=False,
     )
     plt.savefig(
-        "plots" + folder_no + "/" + str(episode) + regret_type + "_posterior_std.png",
+        folder_no + "/" + str(episode) + regret_type + "_posterior_std.png",
         bbox_inches="tight",
     )
     plt.close()
@@ -122,7 +127,7 @@ def plot_heatmaps(posterior_mean, posterior_std, episode=0, regret_type=""):
         cbar=False,
     )
     plt.savefig(
-        "plots" + folder_no + "/" + str(episode) + regret_type + "_rounded_mean.png",
+        folder_no + "/" + str(episode) + regret_type + "_rounded_mean.png",
         bbox_inches="tight",
     )
     plt.close()
@@ -139,7 +144,7 @@ def plot_heatmaps(posterior_mean, posterior_std, episode=0, regret_type=""):
         cbar=False,
     )
     plt.savefig(
-        "plots" + folder_no + "/" + str(episode) + regret_type + "_rounded_std.png",
+        folder_no + "/" + str(episode) + regret_type + "_rounded_std.png",
         bbox_inches="tight",
     )
     plt.close()
@@ -170,12 +175,7 @@ def plot_heatmaps(posterior_mean, posterior_std, episode=0, regret_type=""):
         cbar=False,
     )
     plt.savefig(
-        "plots"
-        + folder_no
-        + "/"
-        + str(episode)
-        + regret_type
-        + "_rounded_scaled_mean.png",
+        folder_no + "/" + str(episode) + regret_type + "_rounded_scaled_mean.png",
         bbox_inches="tight",
     )
     plt.close()
@@ -192,12 +192,7 @@ def plot_heatmaps(posterior_mean, posterior_std, episode=0, regret_type=""):
         cbar=False,
     )
     plt.savefig(
-        "plots"
-        + folder_no
-        + "/"
-        + str(episode)
-        + regret_type
-        + "_rounded_scaled_std.png",
+        folder_no + "/" + str(episode) + regret_type + "_rounded_scaled_std.png",
         bbox_inches="tight",
     )
     plt.close()
@@ -211,7 +206,7 @@ def save_initial_render(env, episode, regret_type=""):
     plt.axis("off")
     plt.imshow(initial_render)
     plt.savefig(
-        "plots" + folder_no + "/" + str(episode) + regret_type + "_env.png",
+        folder_no + "/" + str(episode) + regret_type + "_env.png",
         bbox_inches="tight",
     )
     plt.close()
