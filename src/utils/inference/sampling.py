@@ -132,7 +132,7 @@ def bayesian_parameter_learning(
         # Check if we accept the proposal
         p = log_likelihood  # We don't multiply by the prior because it's uniform
         p_old = old_log_likelihood
-        quotient = np.exp(p)/np.exp(p_old)
+        quotient = np.exp(p-p_old)
         # quotient = np.exp(p - p_old)
         if np.random.uniform(0, 1) < quotient:
             previous_sample = proposed_parameter

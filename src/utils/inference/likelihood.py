@@ -14,8 +14,13 @@ def compute_log_likelihood(T, policy, trajectory):
     log_likelihood = 0.0
     for s, a, next_s in trajectory[:-1]:
         if (T[s, a, next_s] * policy[s, a]) == 0:
-            print("encountered an impossible transition in my trajectory. this can't be. ignoring it for likelihood")
-            print("current (s,a,next_s) tuple: ", (s,a,next_s))
+            #this can happen if samples generate a uniform policy (e.g. due to low gamma and p) and the agent thereby takes
+            #a step off the grid
+            # print("encountered an impossible transition in my trajectory. this can't be. ignoring it for likelihood")
+            # print("current (s,a,next_s) tuple: ", (s,a,next_s))
+            # print("Transition probability: T[s, a, next_s]", T[s, a, next_s])
+            # print("Policy probability: policy[s, a]", policy[s, a])
+            pass
         else:
             log_likelihood += np.log(T[s, a, next_s] * policy[s, a])
     return log_likelihood
