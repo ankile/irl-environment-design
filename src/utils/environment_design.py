@@ -1,7 +1,7 @@
 from tqdm import tqdm
 import numpy as np
 
-from .make_environment import transition_matrix
+from .make_environment import transition_matrix, insert_walls_into_T
 from .optimization import soft_q_iteration, grad_policy_maximization, value_iteration_with_policy
 from .inference.rollouts import generate_n_trajectories
 from .inference.likelihood import compute_log_likelihood
@@ -17,7 +17,10 @@ def environment_search(
     candidate_envs,
     n_actions = 4,
     how = "likelihood",
-    return_sorted = True
+    return_sorted = True,
+    agent_p = None,
+    agent_gamma = None,
+    agent_R = None
 ):
     """
     N, M: width and length of environment
@@ -27,11 +30,11 @@ def environment_search(
     posterior_samples: samples from posterior
     n_traj_per_sample: number of trajectories to generate for each sample, only relevant if how == "likelihood"
     candidate_envs: list of environments for which we calculate the regret
+    agent_p: agent perceived transition rate, if given is used instead of the samples
+    agent_gamma: agent gamma, if given is used instead of the samples
+    agent_R: agent R, if given is used instead of the samples
     """
     n_states = N*M
-
-    # Create the true transition matrix
-    T_true = transition_matrix(N, M, p=0.99, absorbing_states=goal_states)
 
     # 1. Initialize storage
     highest_regret = -np.inf
@@ -54,8 +57,18 @@ def environment_search(
             likelihoods = []
 
             for p, gamma, R in posterior_samples:
+
+                #if we dont want to learn some parameter, we overwrite the sample with the true value
+                if agent_p is not None:
+                    p = agent_p
+                if agent_gamma is not None:
+                    gamma = agent_gamma
+                if agent_R is not None:
+                    R = agent_R
+
                 # 4.1.1 Find the optimal policy for this env and posterior sample
                 T_agent = transition_matrix(N, M, p=p, absorbing_states=goal_states)
+                T_agent = insert_walls_into_T(T_agent, wall_indices=candidate_env.wall_states)
                 policy = soft_q_iteration(R, T_agent, gamma=gamma, beta=beta_agent)
                 policies.append(policy)
 
@@ -86,7 +99,7 @@ def environment_search(
                 n_states=n_states,
                 n_actions=n_actions,
                 trajectories=trajectories,
-                T_true=T_true,
+                T_true=candidate_env.T_true,
                 n_iter=100,
             )
             candidate_env.max_likelihood_policy = most_likely_policy
@@ -94,17 +107,17 @@ def environment_search(
 
             # 4.3 Calculate the regret of the most likely policy
             most_likely_likelihoods = [
-                compute_log_likelihood(T_true, most_likely_policy, traj)
+                compute_log_likelihood(candidate_env.T_true, most_likely_policy, traj)
                 for traj in trajectories
             ]
 
             all_likelihoods = np.array([likelihoods, most_likely_likelihoods]).T
             candidate_env.log_likelihoods = all_likelihoods.mean(axis=0)
-            candidate_env.log_regret = np.diff(candidate_env.log_likelihoods).item()
+            candidate_env.log_regret = -np.diff(candidate_env.log_likelihoods).item()
 
             all_likelihoods = np.exp(all_likelihoods)
             candidate_env.likelihoods = all_likelihoods.mean(axis=0)
-            candidate_env.regret = -np.diff(candidate_env.likelihoods).item()
+            candidate_env.regret = -np.diff(candidate_env.likelihoods).item() #there was a "-" in front of np.diff here. Do you know why?
 
             candidate_env.trajectories = trajectories
 
@@ -136,29 +149,29 @@ def environment_search(
         for candidate_env in pbar:
             regret = 0
 
-            # T_agent = transition_matrix(N, M, p=p_sample, absorbing_states=goal_states)
-            T_true = (
-                candidate_env.T_true
-            )  # @Lars: is this the right environment to use here? Btw this is why it always returned the same
-            # regret as I always performed the calculation in the same environment (in the T_agent = ... environment in the line above)
 
             # calculate regret for one policy for each sample
             for p_sample, gamma_sample, R_sample in posterior_samples:
-                V, _ = value_iteration_with_policy(R_sample, T_true, gamma_sample)
+
+                #agents transition function according to p_sample
+                T_agent = transition_matrix(N, M, p=p_sample, absorbing_states=goal_states)
+                T_agent = insert_walls_into_T(T_agent, wall_indices=candidate_env.wall_states)
+
+                V, _ = value_iteration_with_policy(R_sample, T_agent, gamma_sample)
                 regret += V[0] / len(posterior_samples)
                 # print("regret: ", regret)
 
             # calculate regret for one policy across all samples
             R_sample_mean = np.mean([sample[2] for sample in posterior_samples], axis=0)
-            # p_sample_mean = np.mean([sample[1] for sample in posterior_samples], axis = 0)
+            p_sample_mean = np.mean([sample[1] for sample in posterior_samples], axis = 0)
             gamma_sample_mean = np.mean(
                 [sample[0] for sample in posterior_samples], axis=0
-            )  # this doesnt do anything as all
-            # gamma samples right not are the same (0.9 in this case)
+            )
 
-            # T_agent_mean = transition_matrix(N, M, p=p_sample_mean, absorbing_states=goal_states)
+            T_agent_mean = transition_matrix(N, M, p=p_sample_mean, absorbing_states=goal_states)
+            T_agent_mean = insert_walls_into_T(T_agent_mean, wall_indices=candidate_env.wall_states)
             V_mean, _ = value_iteration_with_policy(
-                R_sample_mean, T_true, gamma_sample_mean
+                R_sample_mean, T_agent_mean, gamma_sample_mean
             )
 
             regret -= V_mean[0]
