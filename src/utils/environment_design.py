@@ -73,7 +73,9 @@ def environment_search(
                 policies.append(policy)
 
                 # 4.1.2 Generate $m$ trajectories from this policy
-                policy_traj = generate_n_trajectories(
+
+                try:
+                    policy_traj = generate_n_trajectories(
                     candidate_env.T_true,
                     policy,
                     goal_states,
@@ -83,6 +85,8 @@ def environment_search(
                     # so we allow twice this at most
                     max_steps=(N + M - 2) * 2,
                 )
+                except:
+                    return [policy, candidate_env]
 
                 # 4.1.3 Calculate the likelihood of the trajectories
                 policy_likelihoods = [
@@ -152,6 +156,14 @@ def environment_search(
 
             # calculate regret for one policy for each sample
             for p_sample, gamma_sample, R_sample in posterior_samples:
+
+                #if we dont want to learn some parameter, we overwrite the sample with the true value
+                if agent_p is not None:
+                    p = agent_p
+                if agent_gamma is not None:
+                    gamma = agent_gamma
+                if agent_R is not None:
+                    R = agent_R
 
                 #agents transition function according to p_sample
                 T_agent = transition_matrix(N, M, p=p_sample, absorbing_states=goal_states)

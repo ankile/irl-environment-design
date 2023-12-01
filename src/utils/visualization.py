@@ -52,18 +52,24 @@ def plot_environment(reward_function, wall_states, start_state=(0, 0), ax=None):
 
     if ax is None:
         fig, ax = plt.subplots()
+    ax.get_xaxis().set_visible(False)
+    ax.get_yaxis().set_visible(False)
 
-    ax.matshow(reward_function, cmap=plt.cm.Wistia)
+    ax.matshow(reward_function, cmap="turbo")
 
     # Annotate each cell with the reward, start, and wall
     for (i, j), val in np.ndenumerate(reward_function):
+        if val == 0:
+            continue
         if (i, j) == start_state:
-            ax.text(j, i, "Start", va="center", ha="center")
+            ax.text(j, i, "S", va="center", ha="center", color="black")
         elif (i, j) in wall_states:
             # Add a dark gray rectangle to represent the wall
             ax.add_patch(Rectangle((j - 0.5, i - 0.5), 1, 1, color="darkgray"))
         else:
-            ax.text(j, i, f"{val:.2f}", va="center", ha="center")
+            ax.text(j, i, f"{val:g}", va="center", ha="center", color="white")
+    ax.text(start_state[1],start_state[0], "S", va="center", ha="center", color="white")
+
 
 
 def plot_environments_with_regret(envs):
