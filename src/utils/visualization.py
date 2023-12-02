@@ -14,8 +14,9 @@ def plot_trajectories(N, M, trajectories, reward_matrix, ax=None):
 
     # Plot rewards as heatmap
     im = ax.imshow(
-        reward_matrix.reshape(N, M), cmap="viridis", origin="upper", vmin=-10
-    )
+        reward_matrix.reshape(N, M), cmap="turbo", origin="upper")
+    ax.get_xaxis().set_visible(False)
+    ax.get_yaxis().set_visible(False)
 
     # Plot trajectories
     for traj in trajectories:
@@ -38,6 +39,7 @@ def plot_trajectories(N, M, trajectories, reward_matrix, ax=None):
     ax.xaxis.tick_top()
     # To also move the x-axis label if you have one
     ax.xaxis.set_label_position("top")
+    ax.set_title(f"{len(trajectories)} Expert Trajectories")
 
 
 from matplotlib.patches import Rectangle
@@ -59,16 +61,16 @@ def plot_environment(reward_function, wall_states, start_state=(0, 0), ax=None):
 
     # Annotate each cell with the reward, start, and wall
     for (i, j), val in np.ndenumerate(reward_function):
-        if val == 0:
-            continue
         if (i, j) == start_state:
             ax.text(j, i, "S", va="center", ha="center", color="black")
         elif (i, j) in wall_states:
             # Add a dark gray rectangle to represent the wall
             ax.add_patch(Rectangle((j - 0.5, i - 0.5), 1, 1, color="darkgray"))
-        else:
+        elif val != 0:
             ax.text(j, i, f"{val:g}", va="center", ha="center", color="white")
-    ax.text(start_state[1],start_state[0], "S", va="center", ha="center", color="white")
+    ax.text(0,0, "S", va="center", ha="center", color="white")
+    ax.set_title(f"Environment")
+
 
 
 
@@ -200,7 +202,8 @@ def mcmc_diagnostics(samples: list[ParamTuple], true_params: ParamTuple = None):
 
 def plot_log_likelihood(param_values: ParamTuple, 
                         expert_trajectories: list[tuple[Environment, list[StateTransition]]], 
-                        goal_states: list
+                        goal_states: list,
+                        ax = None
                         ):
 
     '''
@@ -211,8 +214,10 @@ def plot_log_likelihood(param_values: ParamTuple,
     --expert trajectories: list of tuples containing environments and their respective expert environments
     --goal_states: list of goal states, flattened
     '''
-
-    fig, axs = plt.subplots()
+    if ax is None:
+        _, axs = plt.subplots()
+    else:
+        axs = ax
     n_samples_per_axis = 15
 
     gammas = np.linspace(0.5, 0.95, n_samples_per_axis)
@@ -242,6 +247,6 @@ def plot_log_likelihood(param_values: ParamTuple,
     axs.set_ylabel("$\gamma$")
     axs.set_xticks(np.arange(n_samples_per_axis), np.round(ps, 2), rotation='vertical')
     axs.set_yticks(np.arange(n_samples_per_axis), np.round(gammas, 2))
-    axs.set_title(f"Posterior log-likelihood over $p$ and $\gamma$ using true $R$\nTrue values = {(param_values.p, param_values.gamma)}")
+    axs.set_title(f"Posterior over $p$ and $\gamma$")
     plt.plot(index_p_true, index_gamma_true, "og", label = "True Values")
     axs.legend()

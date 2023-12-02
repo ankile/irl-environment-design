@@ -69,13 +69,12 @@ def environment_search(
                 # 4.1.1 Find the optimal policy for this env and posterior sample
                 T_agent = transition_matrix(N, M, p=p, absorbing_states=goal_states)
                 T_agent = insert_walls_into_T(T_agent, wall_indices=candidate_env.wall_states)
-                policy = soft_q_iteration(R, T_agent, gamma=gamma, beta=beta_agent)
+                policy = soft_q_iteration(R, T_agent, gamma=gamma, beta=1000)
                 policies.append(policy)
 
                 # 4.1.2 Generate $m$ trajectories from this policy
 
-                try:
-                    policy_traj = generate_n_trajectories(
+                policy_traj = generate_n_trajectories(
                     candidate_env.T_true,
                     policy,
                     goal_states,
@@ -85,8 +84,7 @@ def environment_search(
                     # so we allow twice this at most
                     max_steps=(N + M - 2) * 2,
                 )
-                except:
-                    return [policy, candidate_env]
+
 
                 # 4.1.3 Calculate the likelihood of the trajectories
                 policy_likelihoods = [
@@ -119,16 +117,16 @@ def environment_search(
             candidate_env.log_likelihoods = all_likelihoods.mean(axis=0)
             candidate_env.log_regret = -np.diff(candidate_env.log_likelihoods).item()
 
-            all_likelihoods = np.exp(all_likelihoods)
-            candidate_env.likelihoods = all_likelihoods.mean(axis=0)
-            candidate_env.regret = -np.diff(candidate_env.likelihoods).item() #there was a "-" in front of np.diff here. Do you know why?
+            # all_likelihoods = np.exp(all_likelihoods)
+            # candidate_env.likelihoods = all_likelihoods.mean(axis=0)
+            # candidate_env.regret = -np.diff(candidate_env.likelihoods).item() #there was a "-" in front of np.diff here. Do you know why?
 
             candidate_env.trajectories = trajectories
 
             # 4.4 If the regret is higher than the highest regret so far, store the env and policy
-            if candidate_env.regret > highest_regret:
-                highest_regret = candidate_env.regret
-                pbar.set_postfix({"highest_regret": highest_regret})
+            if candidate_env.log_regret > highest_regret:
+                highest_regret = candidate_env.log_regret
+                pbar.set_postfix({"highest_log_regret": highest_regret, "wall_states": candidate_env.wall_states})
             candidate_env.id = candidate_env_id
             candidate_env_id += 1
 
@@ -139,7 +137,7 @@ def environment_search(
 
         # 5. Return the environments (ordered by regret, with higest regret first)
         if return_sorted:
-            return sorted(candidate_envs, key=lambda env: env.regret, reverse=True)
+            return sorted(candidate_envs, key=lambda env: env.log_regret, reverse=True)
         else:
             return candidate_envs
 
