@@ -129,15 +129,17 @@ def make_chain_experiment(
         # transition_mode=TransitionMode.FULL,  # We don't need this because the transition matrix is overridden
     )
 
+    experiment.params = {
+        "disengage_prob": disengage_prob,
+        "lost_progress_prob": lost_progress_prob,
+    }
+
     T_new = make_chain_transition(
         T=experiment.mdp.T,
         height=experiment.mdp.height,
         width=experiment.mdp.width,
         prob=prob,
-        params={
-            "disengage_prob": disengage_prob,
-            "lost_progress_prob": lost_progress_prob,
-        },
+        params=experiment.params,
     )
 
     experiment.mdp.T = T_new

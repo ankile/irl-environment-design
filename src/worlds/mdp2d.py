@@ -226,6 +226,8 @@ class Experiment_2D:
 
         self.rewards_dict = self.fix_rewards_dict(rewards_dict)
 
+        self.params = None
+
         S, A, T, R = self.make_MDP_params()
         self.mdp: MDP_2D = MDP_2D(S, A, T, R, gamma)
 
