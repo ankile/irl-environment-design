@@ -1,8 +1,12 @@
 import numpy as np
 import torch
 
-from .inference import likelihood #to fix circular import we can not import log_likelihood_torch here TODO make this prettier
+from .inference import (
+    likelihood,
+)  # to fix circular import we can not import log_likelihood_torch here TODO make this prettier
+
 # from .inference.likelihood import log_likelihood_torch
+
 
 # @jit(nopython=True)
 def value_iteration_with_policy(
@@ -26,6 +30,7 @@ def value_iteration_with_policy(
         V = V_new
     V = V / np.max(V) * R.max()
     return V, policy
+
 
 # @njit
 def soft_q_iteration(
@@ -63,6 +68,7 @@ def soft_q_iteration(
         V = V_new
 
     return policy
+
 
 def soft_q_iteration_torch(
     R: torch.Tensor,  # R is a one-dimensional tensor with shape (n_states,)
@@ -120,8 +126,10 @@ def grad_policy_maximization(
         policy = exp_Q / torch.sum(exp_Q, axis=1, keepdims=True)
 
         mean_log_likelihood = torch.stack(
-            [likelihood.log_likelihood_torch(T_true, policy, traj)
-             for traj in trajectories]
+            [
+                likelihood.log_likelihood_torch(T_true, policy, traj)
+                for traj in trajectories
+            ]
         ).mean()
         (-mean_log_likelihood).backward()
         optimizer.step()

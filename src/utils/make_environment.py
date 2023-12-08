@@ -3,6 +3,7 @@ from collections import deque
 import numpy as np
 import torch
 
+
 # @jit(nopython=True)
 def make_absorbing(absorbing_states, T: np.ndarray) -> None:
     # Now all states with non-zero rewards are absorbing states
@@ -11,7 +12,6 @@ def make_absorbing(absorbing_states, T: np.ndarray) -> None:
 
 
 def transition_matrix(N, M, p, absorbing_states):
-
     n_states = N * M
     n_actions = 4  # N, E, S, W
 
@@ -19,7 +19,8 @@ def transition_matrix(N, M, p, absorbing_states):
     T = np.zeros((n_states, n_actions, n_states))
 
     # Helper function to convert 2D grid indices to 1D state index
-    def to_s(i, j): return i * M + j
+    def to_s(i, j):
+        return i * M + j
 
     # Populate the transition matrix
     for i in range(N):
@@ -47,7 +48,6 @@ def transition_matrix(N, M, p, absorbing_states):
 
 
 def insert_walls_into_T(T, wall_indices):
-
     """
     Insert walls at predefined states into a transition matrix T.
 
@@ -79,7 +79,9 @@ def insert_walls_into_T(T, wall_indices):
     return T
 
 
-def insert_random_walls_into_transition_matrix(T, n_walls, absorbing_states, start_state=0):
+def insert_random_walls_into_transition_matrix(
+    T, n_walls, absorbing_states, start_state=0
+):
     """
     Randomly inserts wall blocks into the transition matrix T.
 
@@ -102,14 +104,24 @@ def insert_random_walls_into_transition_matrix(T, n_walls, absorbing_states, sta
     # Randomly select states to turn into walls.
     wall_states = np.random.choice(wall_candidates, size=n_walls, replace=False)
 
-    #insert walls into transition matrix
+    # insert walls into transition matrix
     T = insert_walls_into_T(T=T, wall_indices=wall_states)
 
     return T, wall_states
 
 
 class Environment:
-    def __init__(self, N, M, T_true, wall_states, R_sample_mean, start_state, n_walls):
+    def __init__(
+        self,
+        N,
+        M,
+        T_true,
+        wall_states,
+        R_sample_mean,
+        start_state,
+        n_walls,
+        R_true=None,
+    ):
         self.N = N
         self.M = M
         self.T_true = T_true
@@ -118,7 +130,7 @@ class Environment:
         self.n_walls = n_walls
         self.start_state = start_state
 
-        self.R_true = None
+        self.R_true = R_true
         self.trajectories = None
         self.regret = None
         self.log_regret = None
@@ -158,13 +170,7 @@ def is_terminal_reachable(T, goal_states, start_state=0):
     return False
 
 
-def get_candidate_environments(
-    n_envs,
-    N,
-    M,
-    T_true,
-    goal_states) -> list[Environment]:
-    
+def get_candidate_environments(n_envs, N, M, T_true, goal_states) -> list[Environment]:
     envs = []
     # goal_states = np.where(R > 0)[0]
     possible_start_states = [0]
