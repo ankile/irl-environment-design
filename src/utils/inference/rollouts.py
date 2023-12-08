@@ -17,12 +17,18 @@ def generate_trajectory(T_true, policy, absorbing_states, start_state=0, max_ste
             break
         # Sample an action based on the policy probabilities for the current state
         action_probabilities = policy[current_state]
-        chosen_action = np.random.choice(n_actions, p=action_probabilities)
-
+        try:
+            chosen_action = np.random.choice(n_actions, p=action_probabilities)
+        except:
+            print("action probabilities: ", action_probabilities)
+            print("sum action probabilities: ", sum(action_probabilities))
         # Manually sample next_state based on T_true
-        next_state = np.random.choice(
-            n_states, p=T_true[current_state, chosen_action])
-
+        try:
+            next_state = np.random.choice(
+                n_states, p=T_true[current_state, chosen_action])
+        except:
+            print("action probabilities: ", T_true[current_state, chosen_action])
+            print("sum action probabilities: ", sum(T_true[current_state, chosen_action]))            
         trajectory.append((current_state, chosen_action, next_state))
         current_state = next_state
 

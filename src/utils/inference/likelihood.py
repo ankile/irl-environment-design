@@ -53,8 +53,8 @@ def expert_trajectory_log_likelihood(
             parameter_sample.R, T_agent, gamma=parameter_sample.gamma, beta=beta_agent
         )
         for traj in trajectories:
-            log_likelihood += compute_log_likelihood(env.T_true, policy, traj)
-
+            len_traj = len(traj)
+            log_likelihood += compute_log_likelihood(env.T_true, policy, traj)/len_traj
     if log_likelihood == -np.inf:
         print("log likelihood is negative infinity. sth is weird.")
 
