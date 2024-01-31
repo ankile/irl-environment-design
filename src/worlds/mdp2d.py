@@ -200,16 +200,16 @@ class Experiment_2D:
         action_success_prob=0.8,
         rewards_dict={-1: 100, -2: -100, -6: -100, -10: -100},
         gamma=0.9,
-        transition_mode: TransitionMode = TransitionMode.SIMPLE,
+        # transition_mode: TransitionMode = TransitionMode.FULL,
     ):
         # Assert valid parameters
         assert (
             0 <= action_success_prob <= 1
         ), "Action success probability must be in [0, 1]"
         assert 0 <= gamma <= 1, "Gamma must be in [0, 1]"
-        assert (
-            transition_mode in TransitionMode
-        ), f"Transition mode must be one of {TransitionMode}"
+        # assert (
+        #     transition_mode in TransitionMode
+        # ), f"Transition mode must be one of {TransitionMode}"
         assert (
             0 <= len(rewards_dict) <= height * width
         ), "Number of rewards must be in [0, height * width]"
@@ -222,7 +222,7 @@ class Experiment_2D:
         self.width = width
         self.gamma = gamma
         self.action_success_prob = action_success_prob
-        self.transition_mode = transition_mode
+        # self.transition_mode = transition_mode
 
         self.rewards_dict = self.fix_rewards_dict(rewards_dict)
 
@@ -263,15 +263,18 @@ class Experiment_2D:
         A,
         height,
         width,
+        absorbing_states: np.ndarray,
         action_success_prob,
-        mode: TransitionMode = TransitionMode.SIMPLE,
+        wall_states: np.ndarray=None, 
+        # mode: TransitionMode = TransitionMode.SIMPLE,
     ) -> None:
-        def _set_probs_for_state_simple(i, action, target):
-            if target == i:
-                T[action, i, i] = 1
-            else:
-                T[action, i, target] = action_success_prob
-                T[action, i, i] = 1 - action_success_prob
+        
+        # def _set_probs_for_state_simple(i, action, target):
+        #     if target == i:
+        #         T[action, i, i] = 1
+        #     else:
+        #         T[action, i, target] = action_success_prob
+        #         T[action, i, i] = 1 - action_success_prob
 
         def _set_probs_for_state(i, action, target):
             def in_bounds(row, col):
@@ -295,19 +298,21 @@ class Experiment_2D:
                 else:
                     T[action, i, i] += remaining_prob
 
-        set_functions = {
-            TransitionMode.SIMPLE: _set_probs_for_state_simple,
-            TransitionMode.FULL: _set_probs_for_state,
-        }
+        # set_functions = {
+        #     TransitionMode.SIMPLE: _set_probs_for_state_simple,
+        #     TransitionMode.FULL: _set_probs_for_state,
+        # }
 
-        assert mode in set_functions, f"Mode {mode} not supported"
-        set_fun = set_functions[mode]
+        # assert mode in set_functions, f"Mode {mode} not supported"
+        # set_fun = set_functions[mode]
+        set_fun = _set_probs_for_state
 
         for action in A:
             for i in range(width * height):
                 # Determine the intended target
                 target = Experiment_2D._get_target(i, action, width, height)
                 set_fun(i, action, target)
+
 
     def make_MDP_params(self):
         n_states = self.width * self.height
@@ -323,8 +328,10 @@ class Experiment_2D:
             A=A,
             height=h,
             width=w,
+            absorbing_states: np.ndarray=None,
+            wall_states: np.ndarray=None
             action_success_prob=self.action_success_prob,
-            mode=self.transition_mode,
+            # mode=self.transition_mode,
         )
 
         # Define a helper function to assign rewards from the rewards dictionary
