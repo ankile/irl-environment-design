@@ -2,14 +2,17 @@ from datetime import datetime
 from enum import Enum
 from typing import Callable, Tuple
 
+
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
-from src.utils.enums import TransitionMode
-
-from src.utils.transition_matrix import make_absorbing, transition_matrix_is_valid
-
 from numba import njit
+
+
+from src.utils.enums import TransitionMode
+from src.utils.transition_matrix import make_absorbing, transition_matrix_is_valid
+from src.utils.make_environment import transition_matrix, insert_walls_into_T
+
 
 
 @njit
@@ -197,10 +200,12 @@ class Experiment_2D:
         self,
         height: int,
         width: int,
+        absorbing_states=[],
+        wall_states=[],
         action_success_prob=0.8,
         rewards_dict={-1: 100, -2: -100, -6: -100, -10: -100},
         gamma=0.9,
-        # transition_mode: TransitionMode = TransitionMode.FULL,
+        transition_mode: TransitionMode = TransitionMode.FULL,
     ):
         # Assert valid parameters
         assert (
@@ -222,7 +227,9 @@ class Experiment_2D:
         self.width = width
         self.gamma = gamma
         self.action_success_prob = action_success_prob
-        # self.transition_mode = transition_mode
+        self.absorbing_states = absorbing_states
+        self.wall_states = wall_states
+        self.transition_mode = transition_mode
 
         self.rewards_dict = self.fix_rewards_dict(rewards_dict)
 
@@ -257,61 +264,61 @@ class Experiment_2D:
 
         return target
 
-    @staticmethod
-    def _fill_transition_matrix(
-        T,
-        A,
-        height,
-        width,
-        absorbing_states: np.ndarray,
-        action_success_prob,
-        wall_states: np.ndarray=None, 
-        # mode: TransitionMode = TransitionMode.SIMPLE,
-    ) -> None:
+    # @staticmethod
+    # def _fill_transition_matrix(
+    #     T,
+    #     A,
+    #     height,
+    #     width,
+    #     action_success_prob,
+    #     absorbing_states: np.ndarray=None,
+    #     wall_states: np.ndarray=None, 
+    #     mode: TransitionMode = TransitionMode.FULL,
+    # ) -> None:
         
-        # def _set_probs_for_state_simple(i, action, target):
-        #     if target == i:
-        #         T[action, i, i] = 1
-        #     else:
-        #         T[action, i, target] = action_success_prob
-        #         T[action, i, i] = 1 - action_success_prob
+    #     def _set_probs_for_state_simple(i, action, target):
+    #         if target == i:
+    #             T[action, i, i] = 1
+    #         else:
+    #             T[action, i, target] = action_success_prob
+    #             T[action, i, i] = 1 - action_success_prob
 
-        def _set_probs_for_state(i, action, target):
-            def in_bounds(row, col):
-                return 0 <= row < height and 0 <= col < width
+    #     def _set_probs_for_state(i, action, target):
+    #         def in_bounds(row, col):
+    #             return 0 <= row < height and 0 <= col < width
 
-            row, col = i // width, i % width
+    #         row, col = i // width, i % width
 
-            # Update transition probability for intended action
-            # Target could end up in same state if action would take agent out of bounds
-            T[action, i, target] = action_success_prob
+    #         # Update transition probability for intended action
+    #         # Target could end up in same state if action would take agent out of bounds
+    #         T[action, i, target] = action_success_prob
 
-            # Calculate remaining probability
-            remaining_prob = (1 - action_success_prob) / 4
+    #         # Calculate remaining probability
+    #         remaining_prob = (1 - action_success_prob) / 4
 
-            # Update transition probabilities for neighbors
-            for d in [(0, -1), (0, 1), (-1, 0), (1, 0)]:
-                dr, dc = d
-                r, c = row + dr, col + dc
-                if in_bounds(r, c) and (neighbor := r * width + c) != target:
-                    T[action, i, neighbor] = remaining_prob
-                else:
-                    T[action, i, i] += remaining_prob
+    #         # Update transition probabilities for neighbors
+    #         for d in [(0, -1), (0, 1), (-1, 0), (1, 0)]:
+    #             dr, dc = d
+    #             r, c = row + dr, col + dc
+    #             if in_bounds(r, c) and (neighbor := r * width + c) != target:
+    #                 T[action, i, neighbor] = remaining_prob
+    #             else:
+    #                 T[action, i, i] += remaining_prob
 
-        # set_functions = {
-        #     TransitionMode.SIMPLE: _set_probs_for_state_simple,
-        #     TransitionMode.FULL: _set_probs_for_state,
-        # }
+    #     set_functions = {
+    #         # TransitionMode.SIMPLE: _set_probs_for_state_simple,   
+    #         TransitionMode.FULL: _set_probs_for_state,
+    #     }
 
-        # assert mode in set_functions, f"Mode {mode} not supported"
-        # set_fun = set_functions[mode]
-        set_fun = _set_probs_for_state
+    #     assert mode in set_functions, f"Mode {mode} not supported"
+    #     set_fun = set_functions[mode]
+    #     set_fun = _set_probs_for_state
 
-        for action in A:
-            for i in range(width * height):
-                # Determine the intended target
-                target = Experiment_2D._get_target(i, action, width, height)
-                set_fun(i, action, target)
+    #     for action in A:
+    #         for i in range(width * height):
+    #             # Determine the intended target
+    #             target = Experiment_2D._get_target(i, action, width, height)
+    #             set_fun(i, action, target)
 
 
     def make_MDP_params(self):
@@ -323,16 +330,22 @@ class Experiment_2D:
 
         T = np.zeros((A.shape[0], n_states, n_states))
 
-        Experiment_2D._fill_transition_matrix(
-            T=T,
-            A=A,
-            height=h,
-            width=w,
-            absorbing_states: np.ndarray=None,
-            wall_states: np.ndarray=None
-            action_success_prob=self.action_success_prob,
-            # mode=self.transition_mode,
-        )
+        # Experiment_2D._fill_transition_matrix(
+        #     T=T,
+        #     A=A,
+        #     height=h,
+        #     width=w,
+        #     action_success_prob=self.action_success_prob,
+        #     mode=self.transition_mode,
+        # )
+
+        T = transition_matrix(N=self.height, M=self.width, p=self.action_success_prob, absorbing_states=self.absorbing_states)
+        T = insert_walls_into_T(T=T, wall_indices=self.wall_states)
+
+        #old codebase had transition matrix as (states, actions, actions), this codebase uses
+        # (actions, states, states)
+        T = np.transpose(T, axes=(1,0,2))
+        
 
         # Define a helper function to assign rewards from the rewards dictionary
         def assign_reward(idx, magnitude):
@@ -363,6 +376,7 @@ class Experiment_2D:
             assign_reward(idx, self.rewards_dict[idx])
 
         return S, A, T, R
+
 
     def solve(self):
         self.mdp.solve()

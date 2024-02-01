@@ -56,7 +56,7 @@ def make_smallbig_experiment(
         height,
         width,
         rewards_dict=wall_dict,
-        transition_mode=TransitionMode.SIMPLE,
+        # transition_mode=TransitionMode.SIMPLE,
     )
 
     return experiment

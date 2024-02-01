@@ -29,21 +29,24 @@ def transition_matrix(N, M, p, absorbing_states):
 
             # Neighboring states
             neighbors = {
-                "N": to_s(i - 1, j) if i > 0 else s,
+                "N": to_s(i + 1, j) if i < N-1 else s,
                 "E": to_s(i, j + 1) if j < M - 1 else s,
-                "S": to_s(i + 1, j) if i < N - 1 else s,
+                "S": to_s(i - 1, j) if i > 0 else s,
                 "W": to_s(i, j - 1) if j > 0 else s,
             }
 
             # Set transition probabilities
-            for a, action in enumerate(["N", "E", "S", "W"]):
+            # Changed actions to be consistent with original Behavior Maps encoding.
+            # 0: left, 1: right, 2: down, 3: up
+            for a, action in enumerate(["W", "E", "S", "N"]):
+            # for a, action in enumerate(["N", "E", "S", "W"]):
                 T[s, a, neighbors[action]] = p
-                for other_action in set(["N", "E", "S", "W"]) - {action}:
+                for other_action in set(["W", "E", "S", "N"]) - {action}:
+                # for other_action in set(["N", "E", "S", "W"]) - {action}:
                     T[s, a, neighbors[other_action]] += (1 - p) / 3
 
     # Make the transition matrix absorbing
-    make_absorbing(absorbing_states, T)
-
+    # make_absorbing(absorbing_states, T)
     return T
 
 
@@ -65,7 +68,8 @@ def insert_walls_into_T(T, wall_indices):
             # Zero out all transitions leading into the wall state.
             T[:, a, s] = 0
 
-            # Zero out all transitions leading out of the wall state.
+            # Once in a wall, the agent stays within forever in the wall (even though it's impossible to get there).
+            # This is so that the sum over the transition probabilities is equal to 1 (would be 0 otherwise).
             T[s, a, :] = 0
 
     # After modifying the transition probabilities, we need to re-normalize the transition
