@@ -7,7 +7,7 @@ from src.utils.enums import TransitionMode
 from matplotlib import pyplot as plt
 from matplotlib.gridspec import GridSpec
 
-from src.visualization.worldviz import plot_world_reward
+# from src.visualization.worldviz import plot_world_reward
 
 from src.worlds.mdp2d import Experiment_2D
 

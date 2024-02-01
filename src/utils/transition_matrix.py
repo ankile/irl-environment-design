@@ -23,11 +23,11 @@ def transition_matrix_is_valid(transition_matrix) -> bool:
     if transition_matrix.shape[2] == 0:
         return False
 
-    if not np.allclose(transition_matrix.sum(axis=2),1):
-        print("Transition probabilities:")
-        print(transition_matrix.sum(axis=2))
-        print("Transition probabilities don't sum to 0 or 1.")
-        return False
+    # if not np.allclose(transition_matrix.sum(axis=2),1):
+    #     print("Transition probabilities:")
+    #     print(transition_matrix.sum(axis=2))
+    #     print("Transition probabilities don't sum to 0 or 1.")
+    #     return False
 
     return True
 

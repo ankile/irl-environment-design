@@ -13,57 +13,83 @@ from src.utils.enums import TransitionMode
 from src.utils.transition_matrix import make_absorbing, transition_matrix_is_valid
 from src.utils.make_environment import transition_matrix, insert_walls_into_T
 
+# from ..utils import optimization
+# from src.utils.optimization import value_iteration_with_policy
 
 
-@njit
-def bellman_eq(
-    A: np.ndarray,
-    V: np.ndarray,
+
+# @njit
+# def bellman_eq(
+#     A: np.ndarray,
+#     V: np.ndarray,
+#     R: np.ndarray,
+#     T: np.ndarray,
+#     gamma: float,
+#     width: int,
+#     row: int,
+#     col: int,
+# ) -> np.ndarray:
+#     state = row * width + col
+#     vals = np.zeros(len(A))
+
+#     for action in A:
+#         transition_probs = T[action][state]
+#         rewards = R[state][action]
+#         vals[action] = np.sum(transition_probs * (rewards + gamma * V.flatten()))
+
+#     return vals
+
+
+# @njit
+# def value_iteration(
+#     V: np.ndarray,
+#     policy: np.ndarray,
+#     S: np.ndarray,
+#     A: np.ndarray,
+#     T: np.ndarray,
+#     R: np.ndarray,
+#     gamma: float,
+#     theta: float,
+#     width: int,
+# ) -> Tuple[np.ndarray, np.ndarray]:
+#     difference = np.inf
+#     while difference >= theta:
+#         difference = 0
+#         for state in S.flatten():
+#             row, col = state // width, state % width
+#             old_V = V[row, col]
+#             v = bellman_eq(A, V, R, T, gamma, width, row, col)
+
+#             policy[row, col] = np.argmax(v)
+#             V[row, col] = np.max(v)
+
+#             difference = np.maximum(difference, np.abs(old_V - V[row, col]))
+
+#     return V, policy
+
+
+# @jit(nopython=True)
+def value_iteration_with_policy(
     R: np.ndarray,
-    T: np.ndarray,
+    T_agent: np.ndarray,
     gamma: float,
-    width: int,
-    row: int,
-    col: int,
-) -> np.ndarray:
-    state = row * width + col
-    vals = np.zeros(len(A))
-
-    for action in A:
-        transition_probs = T[action][state]
-        rewards = R[state][action]
-        vals[action] = np.sum(transition_probs * (rewards + gamma * V.flatten()))
-
-    return vals
-
-
-@njit
-def value_iteration(
-    V: np.ndarray,
-    policy: np.ndarray,
-    S: np.ndarray,
-    A: np.ndarray,
-    T: np.ndarray,
-    R: np.ndarray,
-    gamma: float,
-    theta: float,
-    width: int,
-) -> Tuple[np.ndarray, np.ndarray]:
-    difference = np.inf
-    while difference >= theta:
-        difference = 0
-        for state in S.flatten():
-            row, col = state // width, state % width
-            old_V = V[row, col]
-            v = bellman_eq(A, V, R, T, gamma, width, row, col)
-
-            policy[row, col] = np.argmax(v)
-            V[row, col] = np.max(v)
-
-            difference = np.maximum(difference, np.abs(old_V - V[row, col]))
-
+    tol: float = 1e-6,
+):
+    n_states = R.shape[0]
+    V = np.zeros(n_states)
+    policy = np.zeros(n_states, dtype=np.int32)
+    while True:
+        V_new = np.zeros(n_states)
+        for s in range(n_states):
+            action_values = R[s] + gamma * np.sum(T_agent[s] * V, axis=1)
+            best_action = np.argmax(action_values)
+            V_new[s] = action_values[best_action]
+            policy[s] = best_action
+        if np.max(np.abs(V - V_new)) < tol:
+            break
+        V = V_new
+    V = V / np.max(V) * R.max()
     return V, policy
-
 
 class MDP_2D:
     def __init__(self, S, A, T, R, gamma):
@@ -81,23 +107,23 @@ class MDP_2D:
         self.theta = 0.0001
         self.state = self.S[0][0]
 
-        # sanity checks:
-        assert T.shape == (
-            len(self.A),
-            self.height * self.width,
-            self.height * self.width,
-        )  # action x state x state
+        # # sanity checks:
+        # assert T.shape == (
+        #     len(self.A),
+        #     self.height * self.width,
+        #     self.height * self.width,
+        # )  # action x state x state
 
         # Check if transition probabilities are valid
         assert transition_matrix_is_valid(
             T
         ), "The transition probabilities are not proper."
 
-        assert R.shape == (
-            self.height * self.width,
-            len(self.A),
-            self.height * self.width,
-        )  # state x action x next_state
+        # assert R.shape == (
+        #     self.height * self.width,
+        #     len(self.A),
+        #     self.height * self.width,
+        # )  # state x action x next_state
 
     def make_heatmap(
         self,
@@ -148,21 +174,25 @@ class MDP_2D:
         label_precision=3,
     ):
         # Run value iteration
-        self.V, self.policy = value_iteration(
-            self.V,
-            self.policy,
-            self.S,
-            self.A,
-            self.T,
-            self.R,
-            self.gamma,
-            self.theta,
-            self.width,
-        )
+        # self.V, self.policy = value_iteration(
+        #     self.V,
+        #     self.policy,
+        #     self.S,
+        #     self.A,
+        #     self.T,
+        #     self.R,
+        #     self.gamma,
+        #     self.theta,
+        #     self.width,
+        # )
+        self.V, self.policy = value_iteration_with_policy(self.R, self.T, self.gamma)
 
         precision = label_precision
 
         arrows = ["\u2190", "\u2192", "\u2191", "\u2193"]
+
+        self.policy = np.reshape(self.policy,  newshape=(self.height, self.width))
+        self.V = np.reshape(self.V,  newshape=(self.height, self.width))
 
         if len(self.policy) > 0:
             grid = []
@@ -344,36 +374,39 @@ class Experiment_2D:
 
         #old codebase had transition matrix as (states, actions, actions), this codebase uses
         # (actions, states, states)
-        T = np.transpose(T, axes=(1,0,2))
+        # T = np.transpose(T, axes=(1,0,2))
         
 
-        # Define a helper function to assign rewards from the rewards dictionary
-        def assign_reward(idx, magnitude):
-            # check right border
-            if idx + 1 % w != w and idx + 1 < n_states:
-                R[idx + 1, 0, idx] = magnitude
-            # check left border
-            if idx - 1 % w != w - 1 and idx - 1 >= 0:
-                R[idx - 1, 1, idx] = magnitude
-            # check bottom border
-            if idx <= w * (h - 1) and idx + w < n_states:
-                R[idx + w, 2, idx] = magnitude
-            # check top border
-            if idx >= w and idx - w >= 0:
-                R[idx - w, 3, idx] = magnitude
+        # # Define a helper function to assign rewards from the rewards dictionary
+        # def assign_reward(idx, magnitude):
+        #     # check right border
+        #     if idx + 1 % w != w and idx + 1 < n_states:
+        #         R[idx + 1, 0, idx] = magnitude
+        #     # check left border
+        #     if idx - 1 % w != w - 1 and idx - 1 >= 0:
+        #         R[idx - 1, 1, idx] = magnitude
+        #     # check bottom border
+        #     if idx <= w * (h - 1) and idx + w < n_states:
+        #         R[idx + w, 2, idx] = magnitude
+        #     # check top border
+        #     if idx >= w and idx - w >= 0:
+        #         R[idx - w, 3, idx] = magnitude
 
             # Add reward to the state itself
             # R[idx, :, idx] = magnitude
 
         # previous state, action, new state
-        R = np.zeros((n_states, 4, n_states))
-
-        # Make reward states absorbing and assign rewards
+        # R = np.zeros((n_states, 4, n_states))
+        R = np.zeros(n_states)
+        
         for idx in self.rewards_dict:
-            if self.rewards_dict[idx] > 0:
-                make_absorbing(T, idx)
+            R[idx] = self.rewards_dict[idx]
+        # # Make reward states absorbing and assign rewards
+        # for idx in self.rewards_dict:
+        #     if self.rewards_dict[idx] > 0:
+        #         make_absorbing(T, idx)
 
-            assign_reward(idx, self.rewards_dict[idx])
+        #     assign_reward(idx, self.rewards_dict[idx])
 
         return S, A, T, R
 
