@@ -48,6 +48,7 @@ def run_experiment(
     """
 
     data = np.zeros((len(probs), len(gammas)), dtype=np.int32)
+    boltzmann_policies = []
     policies = {}
     p2idx: Dict[str, int] = {}
 
@@ -72,6 +73,19 @@ def run_experiment(
             label_precision=1,
         )
 
+        # #check if policy has been seen before
+        # if boltzmann_policies == []:
+        #     boltzmann_policies.append(experiment.mdp.policy)
+        # else:
+        #     policy_seen = False
+        #     for policy in boltzmann_policies:
+        #         if np.allclose(experiment.mdp.policy, policy, rtol=0.01):
+        #             policy_seen = True
+        #     if not policy_seen:
+        #         boltzmann_policies.append(experiment.mdp.policy)
+
+
+
         policy_str = follow_policy(
             experiment.mdp.policy,
             height=experiment.height,
@@ -91,7 +105,8 @@ def run_experiment(
             realized_probs[i] = experiment.mdp.T[a, s1, s2]
         else:
             realized_probs[i] = prob
-
+    print("Num different policies:", len(boltzmann_policies))
+    print(boltzmann_policies)
     return ExperimentResult(data, p2idx, realized_probs)
 
 

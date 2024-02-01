@@ -74,10 +74,14 @@ def value_iteration_with_policy(
     T_agent: np.ndarray,
     gamma: float,
     tol: float = 1e-6,
+    V: np.array = None,
+    policy: np.array = None
 ):
     n_states = R.shape[0]
-    V = np.zeros(n_states)
-    policy = np.zeros(n_states, dtype=np.int32)
+    if V is None:
+        V = np.zeros(n_states)
+    if policy is None:
+        policy = np.zeros(n_states, dtype=np.int32)
     while True:
         V_new = np.zeros(n_states)
         for s in range(n_states):
@@ -224,41 +228,41 @@ class MDP_2D:
         #     self.theta,
         #     self.width,
         # )
-        # self.V, self.policy = value_iteration_with_policy(self.R, self.T, self.gamma)
-        self.policy = 
-        precision = label_precision
+        self.V, self.policy = value_iteration_with_policy(self.R, self.T, self.gamma, V = self.V.flatten(), policy=self.policy.flatten())
+        # self.policy = soft_q_iteration(self.R, self.T, self.gamma, beta=20)
+        # precision = label_precision
 
-        arrows = ["\u2190", "\u2192", "\u2191", "\u2193"]
+        # arrows = ["\u2190", "\u2192", "\u2191", "\u2193"]
 
         self.policy = np.reshape(self.policy,  newshape=(self.height, self.width))
         self.V = np.reshape(self.V,  newshape=(self.height, self.width))
 
-        if len(self.policy) > 0:
-            grid = []
-            for row in self.S:
-                grid_row = []
-                for state in row:
-                    row, col = state // self.width, state % self.width
-                    policy = self.policy[row][col].astype(int)
-                    value = self.V[row][col]
-                    grid_row.append(f"{arrows[policy]}\n{value:.{precision}f}")
-                grid.append(grid_row)
+        # if len(self.policy) > 0:
+        #     grid = []
+        #     for row in self.S:
+        #         grid_row = []
+        #         for state in row:
+        #             row, col = state // self.width, state % self.width
+        #             policy = self.policy[row][col].astype(int)
+        #             value = self.V[row][col]
+        #             grid_row.append(f"{arrows[policy]}\n{value:.{precision}f}")
+        #         grid.append(grid_row)
 
-            labels = np.array(grid)
+        #     labels = np.array(grid)
 
-            if save_heatmap or show_heatmap or heatmap_ax:
-                self.make_heatmap(
-                    setup_name,
-                    policy_name,
-                    labels,
-                    base_dir=base_dir,
-                    save=save_heatmap,
-                    show=show_heatmap,
-                    ax=heatmap_ax,
-                    mask=heatmap_mask,
-                )
-
-        return self.V, self.policy
+        #     if save_heatmap or show_heatmap or heatmap_ax:
+        #         self.make_heatmap(
+        #             setup_name,
+        #             policy_name,
+        #             labels,
+        #             base_dir=base_dir,
+        #             save=save_heatmap,
+        #             show=show_heatmap,
+        #             ax=heatmap_ax,
+        #             mask=heatmap_mask,
+        #         )
+        return self.policy
+        # return self.V, self.policy
 
     def reset(self):
         self.state = self.S[0][0]
@@ -269,12 +273,13 @@ class Experiment_2D:
         self,
         height: int,
         width: int,
+        rewards=None,
         absorbing_states=[],
         wall_states=[],
         action_success_prob=0.8,
-        rewards_dict={-1: 100, -2: -100, -6: -100, -10: -100},
+        # rewards_dict={-1: 100, -2: -100, -6: -100, -10: -100},
         gamma=0.9,
-        transition_mode: TransitionMode = TransitionMode.FULL,
+        # transition_mode: TransitionMode = TransitionMode.FULL,
     ):
         # Assert valid parameters
         assert (
@@ -284,9 +289,9 @@ class Experiment_2D:
         # assert (
         #     transition_mode in TransitionMode
         # ), f"Transition mode must be one of {TransitionMode}"
-        assert (
-            0 <= len(rewards_dict) <= height * width
-        ), "Number of rewards must be in [0, height * width]"
+        # assert (
+        #     0 <= len(rewards_dict) <= height * width
+        # ), "Number of rewards must be in [0, height * width]"
         assert (type(height) == int or type(height) == np.int64) and (
             type(width) == int or type(width) == np.int64
         ), "Height and width must be integers"
@@ -295,43 +300,45 @@ class Experiment_2D:
         self.height = height
         self.width = width
         self.gamma = gamma
+        self.rewards = rewards
         self.action_success_prob = action_success_prob
         self.absorbing_states = absorbing_states
         self.wall_states = wall_states
-        self.transition_mode = transition_mode
+        # self.transition_mode = transition_mode
 
-        self.rewards_dict = self.fix_rewards_dict(rewards_dict)
+        # self.rewards_dict = self.fix_rewards_dict(rewards_dict)
 
         self.params = None
 
         S, A, T, R = self.make_MDP_params()
+        R = self.rewards
         self.mdp: MDP_2D = MDP_2D(S, A, T, R, gamma)
 
-    def fix_rewards_dict(self, rewards_dict):
-        fixed_rewards_dict = {}
-        for idx in rewards_dict:
-            if not (idx >= 0 and idx < self.width * self.height):
-                fixed_rewards_dict[idx % (self.width * self.height)] = rewards_dict[idx]
-            else:
-                fixed_rewards_dict[idx] = rewards_dict[idx]
-        rewards_dict = fixed_rewards_dict
-        return rewards_dict
+    # def fix_rewards_dict(self, rewards_dict):
+    #     fixed_rewards_dict = {}
+    #     for idx in rewards_dict:
+    #         if not (idx >= 0 and idx < self.width * self.height):
+    #             fixed_rewards_dict[idx % (self.width * self.height)] = rewards_dict[idx]
+    #         else:
+    #             fixed_rewards_dict[idx] = rewards_dict[idx]
+    #     rewards_dict = fixed_rewards_dict
+    #     return rewards_dict
 
-    @staticmethod
-    def _get_target(i, action, width, height):
-        row, col = i // width, i % width
-        left, right, up, down = i - 1, i + 1, i - width, i + width
+    # @staticmethod
+    # def _get_target(i, action, width, height):
+    #     row, col = i // width, i % width
+    #     left, right, up, down = i - 1, i + 1, i - width, i + width
 
-        if action == 0:  # left
-            target = left if col > 0 else i
-        elif action == 1:  # right
-            target = right if col < width - 1 else i
-        elif action == 2:  # up
-            target = up if row > 0 else i
-        else:  # down
-            target = down if row < height - 1 else i
+    #     if action == 0:  # left
+    #         target = left if col > 0 else i
+    #     elif action == 1:  # right
+    #         target = right if col < width - 1 else i
+    #     elif action == 2:  # up
+    #         target = up if row > 0 else i
+    #     else:  # down
+    #         target = down if row < height - 1 else i
 
-        return target
+    #     return target
 
     # @staticmethod
     # def _fill_transition_matrix(
@@ -436,10 +443,12 @@ class Experiment_2D:
 
         # previous state, action, new state
         # R = np.zeros((n_states, 4, n_states))
-        R = np.zeros(n_states)
-        
-        for idx in self.rewards_dict:
-            R[idx] = self.rewards_dict[idx]
+        # if self.rewards_dict:
+        #     R = np.zeros(n_states)
+            
+        #     for idx in self.rewards_dict:
+        #         R[idx] = self.rewards_dict[idx]
+
         # # Make reward states absorbing and assign rewards
         # for idx in self.rewards_dict:
         #     if self.rewards_dict[idx] > 0:
@@ -447,7 +456,7 @@ class Experiment_2D:
 
         #     assign_reward(idx, self.rewards_dict[idx])
 
-        return S, A, T, R
+        return S, A, T, self.rewards
 
 
     def solve(self):
