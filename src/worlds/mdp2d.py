@@ -68,7 +68,7 @@ from src.utils.make_environment import transition_matrix, insert_walls_into_T
 #     return V, policy
 
 
-# @jit(nopython=True)
+@njit
 def value_iteration_with_policy(
     R: np.ndarray,
     T_agent: np.ndarray,
@@ -78,10 +78,10 @@ def value_iteration_with_policy(
     policy: np.array = None
 ):
     n_states = R.shape[0]
-    if V is None:
-        V = np.zeros(n_states)
-    if policy is None:
-        policy = np.zeros(n_states, dtype=np.int32)
+    # if V is None:
+    V = np.zeros(n_states)
+    # if policy is None:
+    policy = np.zeros(n_states, dtype=np.int32)
     while True:
         V_new = np.zeros(n_states)
         for s in range(n_states):
@@ -96,42 +96,42 @@ def value_iteration_with_policy(
     return V, policy
 
 
-# @njit
-def soft_q_iteration(
-    R: np.ndarray,  # R is a one-dimensional array with shape (n_states,)
-    T_agent: np.ndarray,
-    gamma: float,
-    beta: float,  # Inverse temperature parameter for the softmax function
-    tol: float = 1e-6,
-) -> np.ndarray:
-    n_states, n_actions, _ = T_agent.shape
-    V = np.zeros(n_states)
-    Q = np.zeros((n_states, n_actions))
-    policy = np.zeros((n_states, n_actions))
+# # @njit
+# def soft_q_iteration(
+#     R: np.ndarray,  # R is a one-dimensional array with shape (n_states,)
+#     T_agent: np.ndarray,
+#     gamma: float,
+#     beta: float,  # Inverse temperature parameter for the softmax function
+#     tol: float = 1e-6,
+# ) -> np.ndarray:
+#     n_states, n_actions, _ = T_agent.shape
+#     V = np.zeros(n_states)
+#     Q = np.zeros((n_states, n_actions))
+#     policy = np.zeros((n_states, n_actions))
 
-    while True:
-        for s in range(n_states):
-            for a in range(n_actions):
-                # Calculate the Q-value for action a in state s
-                Q[s, a] = R[s] + gamma * np.dot(T_agent[s, a], V)
+#     while True:
+#         for s in range(n_states):
+#             for a in range(n_actions):
+#                 # Calculate the Q-value for action a in state s
+#                 Q[s, a] = R[s] + gamma * np.dot(T_agent[s, a], V)
 
-        # Apply softmax to get a probabilistic policy
-        max_Q = np.max(Q, axis=1, keepdims=True)
-        # Subtract max_Q for numerical stability
-        exp_Q = np.exp(beta * (Q - max_Q))
-        policy = exp_Q / np.sum(exp_Q, axis=1, keepdims=True)
+#         # Apply softmax to get a probabilistic policy
+#         max_Q = np.max(Q, axis=1, keepdims=True)
+#         # Subtract max_Q for numerical stability
+#         exp_Q = np.exp(beta * (Q - max_Q))
+#         policy = exp_Q / np.sum(exp_Q, axis=1, keepdims=True)
 
-        # Calculate the value function V using the probabilistic policy
-        V_new = np.sum(policy * Q, axis=1)
-        # V_new = sum_along_axis_1(policy * Q)
+#         # Calculate the value function V using the probabilistic policy
+#         V_new = np.sum(policy * Q, axis=1)
+#         # V_new = sum_along_axis_1(policy * Q)
 
-        # Check for convergence
-        if np.max(np.abs(V - V_new)) < tol:
-            break
+#         # Check for convergence
+#         if np.max(np.abs(V - V_new)) < tol:
+#             break
 
-        V = V_new
+#         V = V_new
 
-    return policy
+#     return policy
 
 
 class MDP_2D:
@@ -462,34 +462,34 @@ class Experiment_2D:
     def solve(self):
         self.mdp.solve()
 
-    def myopic(self, gamma):
-        self.mdp.gamma = gamma
+    # def myopic(self, gamma):
+    #     self.mdp.gamma = gamma
 
-    def confident(self, action_success_prob):
-        # probability is LOWER than the "true": UNDERCONFIDENT
-        self.action_success_prob = action_success_prob
-        S, A, T, R = self.make_MDP_params()
-        self.mdp = MDP_2D(S, A, T, R, self.gamma)
+    # def confident(self, action_success_prob):
+    #     # probability is LOWER than the "true": UNDERCONFIDENT
+    #     self.action_success_prob = action_success_prob
+    #     S, A, T, R = self.make_MDP_params()
+    #     self.mdp = MDP_2D(S, A, T, R, self.gamma)
 
-    def pessimistic(
-        self,
-        scaling,
-        new_gamma=None,
-        transition_mode: TransitionMode = TransitionMode.SIMPLE,
-    ):
-        self.transition_mode = transition_mode
-        S, A, T, R = self.make_MDP_params()
+    # def pessimistic(
+    #     self,
+    #     scaling,
+    #     new_gamma=None,
+    #     transition_mode: TransitionMode = TransitionMode.SIMPLE,
+    # ):
+    #     self.transition_mode = transition_mode
+    #     S, A, T, R = self.make_MDP_params()
 
-        # Change the transition probabilities to be more pessimistic
-        neg_rew_idx = [idx for idx in self.rewards_dict if self.rewards_dict[idx] < 0]
+    #     # Change the transition probabilities to be more pessimistic
+    #     neg_rew_idx = [idx for idx in self.rewards_dict if self.rewards_dict[idx] < 0]
 
-        T[:, :, neg_rew_idx] *= scaling
-        T /= T.sum(axis=2, keepdims=True)
+    #     T[:, :, neg_rew_idx] *= scaling
+    #     T /= T.sum(axis=2, keepdims=True)
 
-        if new_gamma is not None:
-            self.gamma = new_gamma
+    #     if new_gamma is not None:
+    #         self.gamma = new_gamma
 
-        self.mdp = MDP_2D(S, A, T, R, self.gamma)
+    #     self.mdp = MDP_2D(S, A, T, R, self.gamma)
 
     def set_user_params(
         self,
