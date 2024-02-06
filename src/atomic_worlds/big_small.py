@@ -2,7 +2,7 @@ import os
 
 import numpy as np
 import seaborn as sns
-from src.utils.enums import TransitionMode
+# from src.utils.enums import TransitionMode
 
 from matplotlib import pyplot as plt
 from matplotlib.gridspec import GridSpec

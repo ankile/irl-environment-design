@@ -22,12 +22,15 @@ ExperimentResult = namedtuple("ExperimentResult", ["data", "p2idx", "probs"])
 
 def run_experiment(
     experiment: Experiment_2D,
-    transition_matrix_func: Callable,
+    # transition_matrix_func: Callable,
     params: dict,
     gammas: np.ndarray,
     probs: np.ndarray,
     start_state: int,
-    realized_probs_indices: list | None = None,
+    # reward_function_type: str = None,
+    # reward_params_a: np.ndarray = None,
+    # reward_params_b: np.ndarray = None,
+    # realized_probs_indices: list | None = None,
     goal_states: set | None = None,
 ) -> ExperimentResult:
     """
@@ -48,20 +51,24 @@ def run_experiment(
     """
 
     data = np.zeros((len(probs), len(gammas)), dtype=np.int32)
-    boltzmann_policies = []
     policies = {}
     p2idx: Dict[str, int] = {}
 
-    realized_probs = np.zeros(probs.shape)
     if goal_states is None:
         goal_states = get_all_absorbing_states(experiment.mdp)
 
+
+
+
     for (i, prob), (j, gamma) in itertools.product(enumerate(probs), enumerate(gammas)):
+
         experiment.set_user_params(
             prob=prob,
             gamma=gamma,
+            # reward_param_a=reward_param_a,
+            # reward_param_b=reward_param_b,
             params=params,
-            transition_func=transition_matrix_func,
+            # transition_func=transition_matrix_func,
             use_pessimistic=False,
         )
 
@@ -72,18 +79,6 @@ def run_experiment(
             heatmap_mask=None,
             label_precision=1,
         )
-
-        # #check if policy has been seen before
-        # if boltzmann_policies == []:
-        #     boltzmann_policies.append(experiment.mdp.policy)
-        # else:
-        #     policy_seen = False
-        #     for policy in boltzmann_policies:
-        #         if np.allclose(experiment.mdp.policy, policy, rtol=0.01):
-        #             policy_seen = True
-        #     if not policy_seen:
-        #         boltzmann_policies.append(experiment.mdp.policy)
-
 
 
         policy_str = follow_policy(
@@ -100,14 +95,9 @@ def run_experiment(
 
         data[i, j] = p2idx[policy_str]
 
-        if realized_probs_indices is not None:
-            a, s1, s2 = realized_probs_indices
-            realized_probs[i] = experiment.mdp.T[a, s1, s2]
-        else:
-            realized_probs[i] = prob
-    print("Num different policies:", len(boltzmann_policies))
-    print(boltzmann_policies)
-    return ExperimentResult(data, p2idx, realized_probs)
+
+    return ExperimentResult(data, p2idx, None)
+    # return ExperimentResult(data, p2idx, realized_probs)
 
 
 def run_one_world(

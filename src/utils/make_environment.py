@@ -82,6 +82,35 @@ def insert_walls_into_T(T, wall_indices):
 
     return T
 
+def transition_matrix_is_valid(transition_matrix) -> bool:
+    """
+    Check if the transition matrix is valid.
+    The transition matrix has shape (a, n, n), where a is the number of actions,
+    n is the number of states.
+    """
+    if not isinstance(transition_matrix, np.ndarray):
+        print("Transition matrix is not a numpy array.")
+        return False
+
+    if transition_matrix.ndim != 3:
+        return False
+
+    if transition_matrix.shape[0] == 0:
+        return False
+
+    if transition_matrix.shape[1] == 0:
+        return False
+
+    if transition_matrix.shape[2] == 0:
+        return False
+
+    # if not np.allclose(transition_matrix.sum(axis=2),1):
+    #     print("Transition probabilities:")
+    #     print(transition_matrix.sum(axis=2))
+    #     print("Transition probabilities don't sum to 0 or 1.")
+    #     return False
+
+    return True
 
 def insert_random_walls_into_transition_matrix(
     T, n_walls, absorbing_states, start_state=0
