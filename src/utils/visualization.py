@@ -225,12 +225,12 @@ def plot_log_likelihood(param_values: ParamTuple,
     n_samples_per_axis = 15
 
     gammas = np.linspace(0.5, 0.95, n_samples_per_axis)
-    ps = np.linspace(0.5, 0.95, n_samples_per_axis)
+    ps = np.linspace(0.95, 0.5, n_samples_per_axis)
 
     likelihoods = np.zeros(shape = (n_samples_per_axis, n_samples_per_axis))
 
     for idx_p, p in enumerate(ps):
-        for idx_gamma, gamma in enumerate(gammas): #only up to 0.95 because it gets unstable for higher gamma
+        for idx_gamma, gamma in enumerate(gammas): #only up to 0.99 because it gets unstable for higher gamma
 
             proposed_parameter = ParamTuple(p=p, gamma=gamma, R=param_values.R)
 
@@ -239,6 +239,8 @@ def plot_log_likelihood(param_values: ParamTuple,
             )
             likelihoods[idx_p, idx_gamma] = likelihood
 
+    #Tranpose matrix as matplotlib imshow transposes it
+    # likelihoods = likelihoods.T
 
     index_p_true = (np. abs(ps - param_values.p)). argmin()
     index_gamma_true = (np. abs(gammas - param_values.gamma)). argmin()
@@ -247,10 +249,11 @@ def plot_log_likelihood(param_values: ParamTuple,
         likelihoods, cmap="viridis", origin="upper"
     )
     plt.colorbar(im, orientation="vertical")
-    axs.set_xlabel("p")
-    axs.set_ylabel("$\gamma$")
-    axs.set_xticks(np.arange(n_samples_per_axis), np.round(ps, 2), rotation='vertical')
-    axs.set_yticks(np.arange(n_samples_per_axis), np.round(gammas, 2))
-    axs.set_title(f"Posterior over $p$ and $\gamma$")
-    plt.plot(index_p_true, index_gamma_true, "og", label = "True Values")
+    #Here we need to transpose everything as imshow transposes the image.
+    axs.set_ylabel("p")
+    axs.set_xlabel("$\gamma$")
+    axs.set_yticks(np.arange(n_samples_per_axis), np.round(ps, 2))
+    axs.set_xticks(np.arange(n_samples_per_axis), np.round(gammas, 2), rotation='vertical')
+    axs.set_title(f"Posterior over $p$ and $\gamma$\nlog likelihood.")
+    plt.plot(index_gamma_true, index_p_true, "og", label = "True Values")
     axs.legend()

@@ -57,7 +57,8 @@ def run_experiment(
     if goal_states is None:
         goal_states = get_all_absorbing_states(experiment.mdp)
 
-
+    #Index for current policy, increased by 1 for each new policy.
+    idx_policy = 0
 
 
     for (i, prob), (j, gamma) in itertools.product(enumerate(probs), enumerate(gammas)):
@@ -92,6 +93,14 @@ def run_experiment(
         policies[(prob, gamma)] = policy_str
         if policy_str not in p2idx:
             p2idx[policy_str] = len(p2idx)
+
+        # policy_str_sorted = ''.join(sorted(policy_str))
+        # _current_policies_sorted = [''.join(sorted(policy_str)) for policy_str in policies.values()]
+
+        # if policy_idx, policy_str_sorted in enumerate(_current_policies_sorted):
+
+            # data[i,j] = idx_policy
+            # p2idx[policy_str] = idx_policy
 
         data[i, j] = p2idx[policy_str]
 
