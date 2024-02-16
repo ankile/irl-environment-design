@@ -230,7 +230,7 @@ def plot_log_likelihood(param_values: ParamTuple,
     likelihoods = np.zeros(shape = (n_samples_per_axis, n_samples_per_axis))
 
     for idx_p, p in enumerate(ps):
-        for idx_gamma, gamma in enumerate(gammas): #only up to 0.99 because it gets unstable for higher gamma
+        for idx_gamma, gamma in enumerate(gammas): #only up to 0.95 because it gets unstable for higher gamma
 
             proposed_parameter = ParamTuple(p=p, gamma=gamma, R=param_values.R)
 
