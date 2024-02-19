@@ -33,6 +33,7 @@ def value_iteration_with_policy(
 
 
 # @njit
+# @jit(nopython=True)
 def soft_q_iteration(
     R: np.ndarray,  # R is a one-dimensional array with shape (n_states,)
     T_agent: np.ndarray,

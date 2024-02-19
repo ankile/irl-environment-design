@@ -150,6 +150,7 @@ class Environment:
         M,
         T_true,
         wall_states,
+        goal_states,
         R_sample_mean,
         start_state,
         n_walls,
