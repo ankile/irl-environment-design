@@ -90,18 +90,56 @@ def run_experiment(
             goal_states=goal_states,
         )
 
+        #Get all previous rollouts/ policies.
+        policy_rollouts = policies.values()
+        #Get only unique ones
+        policy_rollouts = set(policy_rollouts)
+        # print("Current Policy Rollouts:", policy_rollouts)
+
         policies[(prob, gamma)] = policy_str
-        if policy_str not in p2idx:
-            p2idx[policy_str] = len(p2idx)
+        # if policy_str not in p2idx:
+        #     p2idx[policy_str] = len(p2idx)
 
-        # policy_str_sorted = ''.join(sorted(policy_str))
-        # _current_policies_sorted = [''.join(sorted(policy_str)) for policy_str in policies.values()]
 
-        # if policy_idx, policy_str_sorted in enumerate(_current_policies_sorted):
+        if policy_rollouts == set():
+            #First iteration, no equivalent policies yet.
+            p2idx[policy_str] = idx_policy
+            idx_policy += 1
+
+        else:
+            equivalent_policy_exists: bool = False
+            for policy_rollout in policy_rollouts:
+
+                #Check if there exists an equivalent policy already. Here, we define equivalent as
+                # two policies are equivalent if their rollouts are equal up to a permutation (in previous
+                # versions, we defined two policies to be only equivalent if their rollouts are exactly the same).
+                # We can test equality up to a permutation more efficiently by testing whether the policies have
+                #the same length and whether the policies arrive in the same goal state.
+
+                if (len(policy_rollout) == len(policy_str)) and (policy_rollout[-1] == policy_str[-1]):
+                    # Check whether there exists an equivalent policy (up to permutation).
+                    # print(f"Policy has been seen before. Current policy: {policy_str}, Equivalent Policy: {policy_rollout}")
+                    # print("P2idx: ", p2idx)
+                    equivalent_policy_exists = True
+                    equivalent_policy_rollout = policy_rollout
+                    break
+
+
+            if equivalent_policy_exists:
+                    #An equivalent policy exists. So, we index of the current policy is the same as
+                    # the index of the equivalent policy
+                    p2idx[policy_str] = p2idx[equivalent_policy_rollout]
+
+            else:
+                #There exists no equivalent policy, so new policy index is created
+                print("New policy!")
+                p2idx[policy_str] = idx_policy
+                idx_policy += 1
+
 
             # data[i,j] = idx_policy
             # p2idx[policy_str] = idx_policy
-
+        #Update which policy sample (i,j) used.
         data[i, j] = p2idx[policy_str]
 
 
