@@ -45,7 +45,9 @@ def plot_trajectories(N, M, trajectories, reward_matrix, ax=None):
 from matplotlib.patches import Rectangle
 
 
-def plot_environment(reward_function, wall_states, start_state=(0, 0), ax=None):
+def plot_environment(reward_function, wall_states, start_state=(0, 0), ax=None,
+                     annotate=True,
+                     colorbar=False):
     # Assume the reward function is already reshaped to a 2D grid
     N, M = reward_function.shape
     # Identify wall states is the indixes into the
@@ -66,10 +68,12 @@ def plot_environment(reward_function, wall_states, start_state=(0, 0), ax=None):
         elif (i, j) in wall_states:
             # Add a dark gray rectangle to represent the wall
             ax.add_patch(Rectangle((j - 0.5, i - 0.5), 1, 1, color="darkgray"))
-        elif val != 0:
-            ax.text(j, i, f"{val:g}", va="center", ha="center", color="white")
+        elif val != 0 and annotate:
+            ax.text(j, i, f"{round(val, 1):g}", va="center", ha="center", color="white")
     ax.text(0,0, "S", va="center", ha="center", color="white")
     ax.set_title(f"Environment")
+
+
 
 
 
@@ -221,7 +225,7 @@ def plot_log_likelihood(param_values: ParamTuple,
     n_samples_per_axis = 15
 
     gammas = np.linspace(0.5, 0.95, n_samples_per_axis)
-    ps = np.linspace(0.5, 0.95, n_samples_per_axis)
+    ps = np.linspace(0.95, 0.5, n_samples_per_axis)
 
     likelihoods = np.zeros(shape = (n_samples_per_axis, n_samples_per_axis))
 
@@ -235,7 +239,6 @@ def plot_log_likelihood(param_values: ParamTuple,
             )
             likelihoods[idx_p, idx_gamma] = likelihood
 
-
     index_p_true = (np. abs(ps - param_values.p)). argmin()
     index_gamma_true = (np. abs(gammas - param_values.gamma)). argmin()
 
@@ -243,10 +246,11 @@ def plot_log_likelihood(param_values: ParamTuple,
         likelihoods, cmap="viridis", origin="upper"
     )
     plt.colorbar(im, orientation="vertical")
-    axs.set_xlabel("p")
-    axs.set_ylabel("$\gamma$")
-    axs.set_xticks(np.arange(n_samples_per_axis), np.round(ps, 2), rotation='vertical')
-    axs.set_yticks(np.arange(n_samples_per_axis), np.round(gammas, 2))
-    axs.set_title(f"Posterior over $p$ and $\gamma$")
-    plt.plot(index_p_true, index_gamma_true, "og", label = "True Values")
+    #Here we need to transpose everything as imshow transposes the image.
+    axs.set_ylabel("p")
+    axs.set_xlabel("$\gamma$")
+    axs.set_yticks(np.arange(n_samples_per_axis), np.round(ps, 2))
+    axs.set_xticks(np.arange(n_samples_per_axis), np.round(gammas, 2), rotation='vertical')
+    axs.set_title(f"Posterior over $p$ and $\gamma$\nlog likelihood.")
+    plt.plot(index_gamma_true, index_p_true, "og", label = "True Values")
     axs.legend()

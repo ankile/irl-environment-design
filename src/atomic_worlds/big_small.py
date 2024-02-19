@@ -2,7 +2,7 @@ import os
 
 import numpy as np
 import seaborn as sns
-from src.utils.enums import TransitionMode
+# from src.utils.enums import TransitionMode
 
 from matplotlib import pyplot as plt
 from matplotlib.gridspec import GridSpec
@@ -56,7 +56,7 @@ def make_smallbig_experiment(
         height,
         width,
         rewards_dict=wall_dict,
-        transition_mode=TransitionMode.SIMPLE,
+        # transition_mode=TransitionMode.SIMPLE,
     )
 
     return experiment
