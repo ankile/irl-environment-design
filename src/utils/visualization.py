@@ -239,9 +239,6 @@ def plot_log_likelihood(param_values: ParamTuple,
             )
             likelihoods[idx_p, idx_gamma] = likelihood
 
-    #Tranpose matrix as matplotlib imshow transposes it
-    # likelihoods = likelihoods.T
-
     index_p_true = (np. abs(ps - param_values.p)). argmin()
     index_gamma_true = (np. abs(gammas - param_values.gamma)). argmin()
 
