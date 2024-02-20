@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+from numba import jit
 
 from .inference import (
     likelihood,
@@ -33,6 +34,7 @@ def value_iteration_with_policy(
 
 
 # @njit
+# @jit(nopython=True)
 def soft_q_iteration(
     R: np.ndarray,  # R is a one-dimensional array with shape (n_states,)
     T_agent: np.ndarray,

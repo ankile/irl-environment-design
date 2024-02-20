@@ -235,7 +235,7 @@ def plot_log_likelihood(param_values: ParamTuple,
             proposed_parameter = ParamTuple(p=p, gamma=gamma, R=param_values.R)
 
             likelihood = expert_trajectory_log_likelihood(
-                proposed_parameter, expert_trajectories, goal_states
+                proposed_parameter, expert_trajectories
             )
             likelihoods[idx_p, idx_gamma] = likelihood
 
@@ -246,7 +246,6 @@ def plot_log_likelihood(param_values: ParamTuple,
         likelihoods, cmap="viridis", origin="upper"
     )
     plt.colorbar(im, orientation="vertical")
-    #Here we need to transpose everything as imshow transposes the image.
     axs.set_ylabel("p")
     axs.set_xlabel("$\gamma$")
     axs.set_yticks(np.arange(n_samples_per_axis), np.round(ps, 2))

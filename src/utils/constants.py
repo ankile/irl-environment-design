@@ -11,3 +11,16 @@ gamma_limits = (0.5, 0.95)
 R_limits = (0,1)
 
 beta_agent = 20
+
+
+# Import enum types
+from enum import Enum
+
+
+class Action(Enum):
+    """Action types for the agent"""
+
+    LEFT = 0
+    RIGHT = 1
+    UP = 2
+    DOWN = 3

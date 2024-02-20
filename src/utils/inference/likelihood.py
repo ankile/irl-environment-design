@@ -36,7 +36,7 @@ def log_likelihood_torch(T, policy, trajectory):
 def expert_trajectory_log_likelihood(
     parameter_sample: ParamTuple,
     expert_trajectories: list[tuple[Environment, list[StateTransition]]],
-    goal_states: np.array
+    # goal_states: np.array
 ) -> float:
     
     '''
@@ -47,10 +47,11 @@ def expert_trajectory_log_likelihood(
     log_likelihood = 0.0
 
     for env, trajectories in expert_trajectories:
-        T_agent = transition_matrix(env.N, env.M, p=parameter_sample.p, absorbing_states=goal_states)
+        assert env.goal_states is not None, "Add goal states to environment."
+        T_agent = transition_matrix(env.N, env.M, p=parameter_sample.p, absorbing_states=env.goal_states)
         T_agent = insert_walls_into_T(T_agent, wall_indices=env.wall_states) #this is new
         policy = soft_q_iteration(
-            parameter_sample.R, T_agent, gamma=parameter_sample.gamma, beta=beta_agent
+            env.R_true, T_agent, gamma=parameter_sample.gamma, beta=beta_agent
         )
         for traj in trajectories:
             len_traj = len(traj)
