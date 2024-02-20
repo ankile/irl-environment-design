@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+from numba import jit
 
 from .inference import (
     likelihood,

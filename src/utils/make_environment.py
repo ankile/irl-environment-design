@@ -151,9 +151,9 @@ class Environment:
         T_true,
         wall_states,
         goal_states,
-        R_sample_mean,
-        start_state,
-        n_walls,
+        R_sample_mean=None,
+        start_state=0,
+        n_walls=0,
         R_true=None,
     ):
         self.N = N
@@ -163,6 +163,7 @@ class Environment:
         self.R_sample_mean = R_sample_mean
         self.n_walls = n_walls
         self.start_state = start_state
+        self.goal_states = goal_states
 
         self.R_true = R_true
         self.trajectories = None
