@@ -77,22 +77,22 @@ def parameter_proposal_truncnorm(
     return ParamTuple(p=p, gamma=gamma, R=R)
 
 
-def parameter_proposal_mala(previous_sample: ParamTuple,
-                            step_size,
-                            expert_trajectories,
-                            goal_states) -> ParamTuple:
+# def parameter_proposal_mala(previous_sample: ParamTuple,
+#                             step_size,
+#                             expert_trajectories,
+#                             goal_states) -> ParamTuple:
     
-    grad = 0
+#     grad = 0
 
-    for env, trajectories in expert_trajectories:
-        optimizer.zero_grad()
-        T_agent = transition_matrix(env.N, env.M, p=previous_sample.p, absorbing_states=goal_states)
-        T_agent = insert_walls_into_T(T_agent, wall_indices=env.wall_states) #this is new
-        policy = soft_q_iteration(
-            previous_sample.R, T_agent, gamma=previous_sample.gamma, beta=beta_agent
-        )
+#     for env, trajectories in expert_trajectories:
+#         optimizer.zero_grad()
+#         T_agent = transition_matrix(env.N, env.M, p=previous_sample.p, absorbing_states=goal_states)
+#         T_agent = insert_walls_into_T(T_agent, wall_indices=env.wall_states) #this is new
+#         policy = soft_q_iteration(
+#             previous_sample.R, T_agent, gamma=previous_sample.gamma, beta=beta_agent
+#         )
 
-    pass
+#     pass
 
 
 
@@ -101,8 +101,7 @@ def bayesian_parameter_learning(
     # It needs to account for the possibility of multiple trajectories per environment
     expert_trajectories: list[tuple[Environment, list[StateTransition]]],
     sample_size: int,
-    goal_states: np.array,
-    n_states: int,
+    n_states: int = 0, #TODO, remove this argument.
     previous_sample: ParamTuple = None
 ):
     
@@ -115,7 +114,7 @@ def bayesian_parameter_learning(
     if previous_sample is None:
         previous_sample = prior_sample(n_states)
 
-    old_log_likelihood = expert_trajectory_log_likelihood(previous_sample, expert_trajectories, goal_states)
+    old_log_likelihood = expert_trajectory_log_likelihood(previous_sample, expert_trajectories)
 
     it = trange(sample_size, desc="Posterior sampling", leave=False)
     for k in it:
@@ -126,7 +125,7 @@ def bayesian_parameter_learning(
         )
 
         log_likelihood = expert_trajectory_log_likelihood(
-            proposed_parameter, expert_trajectories, goal_states
+            proposed_parameter, expert_trajectories
         )
 
         # Check if we accept the proposal
@@ -160,69 +159,69 @@ def bayesian_parameter_learning(
 
 
 
-'''
-Legacy functions
-'''
+# '''
+# Legacy functions
+# '''
 
 
 
-def get_parameter_sample(
-    n_samples: int, N: int, M: int, ranges=[[0.5, 0.999], [0.5, 0.999], [1, 10]]
-):
-    """
-    Returns a list of prior samples of (T_p, \gamma, R)
+# def get_parameter_sample(
+#     n_samples: int, N: int, M: int, ranges=[[0.5, 0.999], [0.5, 0.999], [1, 10]]
+# ):
+#     """
+#     Returns a list of prior samples of (T_p, \gamma, R)
 
-    Args:
-    - n_samples, int, number of samples to generate
-    - n_states, number of states of the maze, this is required for the reward samples as we generate a reward for each state
-    - ranges, optional, specifies the ranges from which we sample for each argument, is of shape [[lower_range_gamma, higher_range_gamma
-    ], [lower_range_p, higher_range_p], [lower_range_R, higher_range_R]]. Ranges for R must be integers and are divided by 10.
-    """
-    n_states = N*M
+#     Args:
+#     - n_samples, int, number of samples to generate
+#     - n_states, number of states of the maze, this is required for the reward samples as we generate a reward for each state
+#     - ranges, optional, specifies the ranges from which we sample for each argument, is of shape [[lower_range_gamma, higher_range_gamma
+#     ], [lower_range_p, higher_range_p], [lower_range_R, higher_range_R]]. Ranges for R must be integers and are divided by 10.
+#     """
+#     n_states = N*M
 
-    n_cbrt = int(np.cbrt(n_samples))
-    ps = np.linspace(ranges[0][0], ranges[0][1], n_cbrt)
-    gammas = np.linspace(ranges[1][0], ranges[1][1], n_cbrt)
-    Rs = np.random.randint(ranges[2][0], ranges[2][1], size=(n_cbrt, n_states)) / 10
+#     n_cbrt = int(np.cbrt(n_samples))
+#     ps = np.linspace(ranges[0][0], ranges[0][1], n_cbrt)
+#     gammas = np.linspace(ranges[1][0], ranges[1][1], n_cbrt)
+#     Rs = np.random.randint(ranges[2][0], ranges[2][1], size=(n_cbrt, n_states)) / 10
 
-    print("Update Rewards, create richer reward landscape")
-    for R in Rs:
-        R = np.reshape(R, (int(np.sqrt(n_states)), int(np.sqrt(n_states))))
-        rand_num = np.random.random()
+#     print("Update Rewards, create richer reward landscape")
+#     for R in Rs:
+#         R = np.reshape(R, (int(np.sqrt(n_states)), int(np.sqrt(n_states))))
+#         rand_num = np.random.random()
 
-        if rand_num < 0.999:
-            R[N-5, M-1] += 3
-            R[N-4, M-1] += 3
-            R[N-5, M-2] += 3
-            R[N-4, M-2] += 3
+#         if rand_num < 0.999:
+#             R[N-5, M-1] += 3
+#             R[N-4, M-1] += 3
+#             R[N-5, M-2] += 3
+#             R[N-4, M-2] += 3
 
-            R[2, 2] += -2
-            R[3, 3] += -2
-            R[2, 3] += -2
-            R[3, 2] += -2
+#             R[2, 2] += -2
+#             R[3, 3] += -2
+#             R[2, 3] += -2
+#             R[3, 2] += -2
 
-            R[0, 0] += 0.5
-            R[1, 1] += 0.5
-            R[0, 1] += 0.5
-            R[1, 0] += 0.5
+#             R[0, 0] += 0.5
+#             R[1, 1] += 0.5
+#             R[0, 1] += 0.5
+#             R[1, 0] += 0.5
 
-        else:
-            R[N-2, M-1] += 3
-            R[N-1, M-1] += 3
-            R[N-2, M-2] += 3
-            R[N-1, M-2] += 3
+#         else:
+#             R[N-2, M-1] += 3
+#             R[N-1, M-1] += 3
+#             R[N-2, M-2] += 3
+#             R[N-1, M-2] += 3
 
-            R[2, 2] += -2
-            R[3, 3] += -2
-            R[2, 3] += -2
-            R[3, 2] += -2
+#             R[2, 2] += -2
+#             R[3, 3] += -2
+#             R[2, 3] += -2
+#             R[3, 2] += -2
 
-            R[0, 0] += 0.5
-            R[1, 1] += 0.5
-            R[0, 1] += 0.5
-            R[1, 0] += 0.5
+#             R[0, 0] += 0.5
+#             R[1, 1] += 0.5
+#             R[0, 1] += 0.5
+#             R[1, 0] += 0.5
 
-        R = np.reshape(R, n_states)
+#         R = np.reshape(R, n_states)
 
-    samples = list(product(ps, gammas, Rs))
-    return samples
+#     samples = list(product(ps, gammas, Rs))
+#     return samples

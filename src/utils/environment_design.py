@@ -7,6 +7,7 @@ from .make_environment import transition_matrix, insert_walls_into_T
 from .optimization import soft_q_iteration, grad_policy_maximization, value_iteration_with_policy
 from .inference.rollouts import generate_n_trajectories
 from .inference.likelihood import compute_log_likelihood
+from src.utils.inference.sampling import bayesian_parameter_learning
 from .make_environment import Environment
 from .constants import ParamTuple
 from .constants import beta_agent
@@ -24,10 +25,12 @@ class EnvironmentDesign():
         
         self.base_environment = base_environment
         self.user_params = user_params
+        self.all_observations = []
 
     
     def run_n_episodes(self,
-                       n_episodes: int):
+                       n_episodes: int,
+                       candidate_environments_args: dict):
         
         '''
         Run Environment Design for n_episodes episodes.
@@ -35,8 +38,31 @@ class EnvironmentDesign():
         
         self.episodes = n_episodes
 
+        current_environment = self.base_environment
 
-    def generate_candidate_environments(self,
+        for episode in range(self.episodes):
+        
+            #Observe human in environment. Append observation to all observations.
+            observation = self._observe_human(environment=current_environment,n_trajectories=2)
+            self.all_observations.append(observation)
+
+            #Generate Candidate Environments.
+            candidate_environments = self._generate_candidate_environments(num_candidate_environments=candidate_environments_args["n_environments"],
+                                                  generate_how=candidate_environments_args["generate_how"],
+                                                  random_envs_specs=candidate_environments_args)
+            
+            #Generate Samples from current belief.
+            samples = self._sample_posterior(observations=self.all_observations)
+
+            #Find maximum Bayesian Regret environment.
+            #TODO, point to BR calculation.
+            self._generate_candidate_environments
+
+
+            
+
+    #TODO, this should be in make_environment.py, not here.
+    def _generate_candidate_environments(self,
                                         num_candidate_environments: int,
                                         generate_how: str,
                                         random_envs_specs: dict):
@@ -89,10 +115,10 @@ class EnvironmentDesign():
                 #Append wall to list of walls of candidate environment.
                 candidate_env.wall_states = wall_incides
 
-            self.candidate_environments = candidate_envs
+            return candidate_envs
 
 
-    def observe_human(self,
+    def _observe_human(self,
                       environment: Environment,
                       n_trajectories: int=2):
         
@@ -124,6 +150,23 @@ class EnvironmentDesign():
         return [(environment, trajectories)]
 
 
+    def _sample_posterior(self,
+                          observations,
+                          sample_size: int = 500,
+                          burnin: int = 250
+                          ):
+        
+        assert sample_size > burnin, f"Burnin can't be larger than sample size. You set burnin={burnin}, sample_size={sample_size}"
+        
+        #Generate samples from posterior via Metropolis Hastings.
+        _samples = bayesian_parameter_learning(
+            expert_trajectories=observations,
+            sample_size=sample_size
+        )
+
+        #Take burnin away.
+        n_samples_to_keep = sample_size - burnin
+        return _samples[-n_samples_to_keep:]
 
 
 
