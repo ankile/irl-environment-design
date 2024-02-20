@@ -1,3 +1,5 @@
+from typing import List
+
 from tqdm import tqdm
 import numpy as np
 
@@ -5,7 +7,134 @@ from .make_environment import transition_matrix, insert_walls_into_T
 from .optimization import soft_q_iteration, grad_policy_maximization, value_iteration_with_policy
 from .inference.rollouts import generate_n_trajectories
 from .inference.likelihood import compute_log_likelihood
+from .make_environment import Environment
+from .constants import ParamTuple
 from .constants import beta_agent
+
+
+class EnvironmentDesign():
+
+    '''
+    
+    '''
+
+    def __init__(self,
+                 base_environment: Environment,
+                 user_params: ParamTuple):
+        
+        self.base_environment = base_environment
+        self.user_params = user_params
+
+    
+    def run_n_episodes(self,
+                       n_episodes: int):
+        
+        '''
+        Run Environment Design for n_episodes episodes.
+        '''
+        
+        self.episodes = n_episodes
+
+
+    def generate_candidate_environments(self,
+                                        num_candidate_environments: int,
+                                        generate_how: str,
+                                        random_envs_specs: dict):
+        
+        '''
+        Generate candidate environments for the Bayesian Regret calculation.
+        '''
+        
+        self.num_candidate_environments = num_candidate_environments
+        generate_how = generate_how
+
+
+        if generate_how == "random_walls":
+
+
+            #Number of walls to insert.
+            n_walls = random_envs_specs["n_walls"]
+
+
+            #Generate copies of base enviroment.
+            candidate_envs = [
+                Environment(
+                    N=self.base_environment.N,
+                    M=self.base_environment.M,
+                    T_true=self.base_environment.T_true,
+                    goal_states=self.base_environment.goal_states,
+                    wall_states=self.base_environment.wall_states,
+                    n_walls=self.base_environment.n_walls,
+                )
+                for _ in range(self.num_candidate_environments)
+            ]
+
+            #Insert random walls into candidate environments.
+            for candidate_env in candidate_envs:
+
+                # Generate walls at random locations.
+                wall_incides = np.random.randint(1, self.base_environment.N*self.base_environment.M-1, size=n_walls)
+                #Add existing walls
+                wall_incides = np.append(wall_incides, candidate_env.wall_states)
+
+                #Remove potential wall in start state.
+                wall_incides = np.setdiff1d(wall_incides, self.base_environment.start_state)
+
+                #Update transition matrix.
+                #TODO we add wall states of initial environment twice. Check whether this is a problem.
+                candidate_env.T_true = insert_walls_into_T(
+                    candidate_env.T_true, wall_indices=wall_incides
+                )
+
+                #Append wall to list of walls of candidate environment.
+                candidate_env.wall_states = wall_incides
+
+            self.candidate_environments = candidate_envs
+
+
+    def observe_human(self,
+                      environment: Environment,
+                      n_trajectories: int=2):
+        
+        '''
+        Observe human in an environment n_trajectories times.
+
+        Args:
+        - environment: environment in which we observe the human.
+        - n_trajectories: number of times we observe the human.
+
+        Returns:
+        - list of [Environment, trajectories]
+        '''
+        
+
+        #Calculate policy of agent in environment.
+        T_agent = transition_matrix(environment.N, environment.M, p=self.user_params.p, absorbing_states=environment.goal_states)
+        T_agent = insert_walls_into_T(T=T_agent, wall_indices=environment.wall_states)
+        agent_policy = soft_q_iteration(self.user_params.R, T_agent, gamma=self.user_params.gamma, beta=1000)
+
+        # Generate trajectories
+        trajectories = generate_n_trajectories(
+            environment.T_true,
+            agent_policy,
+            environment.goal_states,
+            n_trajectories=n_trajectories,
+        )
+
+        return [(environment, trajectories)]
+
+
+
+
+
+        
+
+        
+
+
+
+
+
 
 
 def environment_search(
@@ -203,8 +332,8 @@ def environment_search(
             return candidate_envs
         
 
-    # you gave an incorrect value for how we should learn
+    # Non-implemented Bayesian Regret calculation method.
     else:
         raise ValueError(
-            f"how should be in ['likelihood', 'value'] while you set how = {how}."
+            f"'how' should be in ['likelihood', 'value'] while you set how = {how}."
         )
