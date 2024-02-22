@@ -204,11 +204,11 @@ class PosteriorInference():
         #Arrays to take mean over.
         posterior_probabilities = np.exp(self.posterior_distribution[f"episode={episode}"])
 
-        self.total_probability = np.sum(posterior_probabilities, axis=(0,1))
+        total_probability = np.sum(posterior_probabilities, axis=(0,1))
         
         #Calculate mean.
-        mean_p = np.sum(self.ps * np.sum(posterior_probabilities, axis=1))/self.total_probability
-        mean_gamma = np.sum(self.gammas * np.sum(posterior_probabilities, axis=0))/self.total_probability
+        mean_p = np.sum(self.ps * np.sum(posterior_probabilities, axis=1))/total_probability
+        mean_gamma = np.sum(self.gammas * np.sum(posterior_probabilities, axis=0))/total_probability
 
 
         return ParamTuple(p=mean_p, gamma=mean_gamma, R=None)
@@ -250,7 +250,8 @@ class PosteriorInference():
 
         posterior_distribution = self.posterior_distribution[f"episode={episode}"]
 
-        likelihood_true = posterior_distribution[index_p_true, index_gamma_true]
-        probability_true = likelihood_true / np.sum(posterior_distribution, axis=(0,1))
-
-        return probability_true
+        total_probability = np.sum(posterior_distribution, axis=(0,1))
+        prob_p_true = np.sum(posterior_distribution[index_p_true,:])/total_probability
+        prob_gamma_true = np.sum(posterior_distribution[:,index_gamma_true])/total_probability
+        
+        return (prob_p_true, prob_gamma_true)

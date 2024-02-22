@@ -49,10 +49,12 @@ class EnvironmentDesign():
         self.episodes = n_episodes
 
         #Observe human in base environment. Append observation to all observations.
+        print("Started episode 0.")
         observation = self._observe_human(environment=self.base_environment, n_trajectories=2)
         self.all_observations.append(observation)
+        print("Finished episode 0.")
 
-        for episode in range(self.episodes-1):
+        for episode in range(1,self.episodes):
         
             print(f"Started episode {episode}.")
             #Generate Candidate Environments.
