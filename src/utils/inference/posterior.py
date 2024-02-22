@@ -171,9 +171,29 @@ class PosteriorInference():
 
 
     def plot_statistics_over_time(self,
-                                  episode: int)
+                                  episode: int):
+        
+        '''
+        Plot the mean and MAP over episodes.
+        '''    
 
         self._validate_episode(episode=episode)
+
+        #Statistics to plot.
+        episodes = np.arange(episode+1)
+        mean_per_episode = [self.mean(episode=i) for i in range(episode+1)]
+        MAP_per_episode = [self.MAP(episode=i) for i in range(episode+1)]
+        prob_true_per_episode = [self.prob_true(episode=i, true_params=None) for i in range(episode+1)]
+
+        #Plot statistics.
+        plt.plot(episodes, mean_per_episode, label="Mean p")
+        plt.plot(episodes, MAP_per_episode, label="MAP p")
+        plt.plot(episodes, prob_true_per_episode, label="Probability of True Parameters")
+        plt.legend()
+        plt.xlabel("Episode")
+        plt.ylabel("Value")
+        plt.title("Statistics over Episodes")
+        plt.show()
 
 
     def mean(self,
