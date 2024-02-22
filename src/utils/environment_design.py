@@ -16,7 +16,7 @@ from .constants import beta_agent
 class EnvironmentDesign():
 
     '''
-    
+    TODO
     '''
 
     def __init__(self,
@@ -27,25 +27,32 @@ class EnvironmentDesign():
         self.user_params = user_params
         self.all_observations = []
 
+        self.candidate_env_generation_methods = ["random_walls"]
+
     
     def run_n_episodes(self,
                        n_episodes: int,
+                       bayesian_regret_how,
                        candidate_environments_args: dict):
         
         '''
         Run Environment Design for n_episodes episodes.
+
+        Args:
+        - n_episodes: number of episodes to run environment design for.
+        - bayesian_regret_how: how to evaluate the Bayesian Regret. Supported methods: ['value', 'likelihood'].
+        - candidate_environments_args: dict for the respective candidate generation method.
         '''
         
         self.episodes = n_episodes
 
-        max_regret_environment = self.base_environment
+        #Observe human in base environment. Append observation to all observations.
+        observation = self._observe_human(environment=self.base_environment, n_trajectories=2)
+        self.all_observations.append(observation)
 
         for episode in range(self.episodes):
         
-            #Observe human in environment. Append observation to all observations.
-            observation = self._observe_human(environment=max_regret_environment,n_trajectories=2)
-            self.all_observations.append(observation)
-
+            print(f"Started episode {episode}")
             #Generate Candidate Environments.
             candidate_environments = self._generate_candidate_environments(num_candidate_environments=candidate_environments_args["n_environments"],
                                                   generate_how=candidate_environments_args["generate_how"],
@@ -55,15 +62,25 @@ class EnvironmentDesign():
             samples = self._sample_posterior(observations=self.all_observations)
 
             #Find maximum Bayesian Regret environment.
-            #TODO, point to BR calculation.
-            self._generate_candidate_environments
-
-            #Select Maximum Regret Environment
-            self._environment_search(base_environment=self.base_environment,
+            candidate_environments_sorted = self._environment_search(base_environment=self.base_environment,
                                      posterior_samples=samples,
                                      n_traj_per_sample=1,
                                      candidate_envs=candidate_environments,
-                                     how="value")
+                                     how=bayesian_regret_how)
+            
+            del samples
+            del candidate_environments
+            
+            #Maximum Regret environment
+            max_regret_environment = candidate_environments_sorted[0]
+
+            del candidate_environments_sorted
+            
+            #Observe human in environment. Append observation to all observations.
+            observation = self._observe_human(environment=max_regret_environment,n_trajectories=2)
+            self.all_observations.append(observation)
+
+            del observation
 
 
     #TODO, this should be in make_environment.py, not here.
@@ -121,6 +138,12 @@ class EnvironmentDesign():
                 candidate_env.wall_states = wall_incides
 
             return candidate_envs
+        
+
+        else:
+        
+            raise NotImplementedError(f"Candidate Environment generation method not implemented. Supported methods are: {self.candidate_env_generation_methods}")
+    
 
 
     def _observe_human(self,
@@ -135,7 +158,7 @@ class EnvironmentDesign():
         - n_trajectories: number of times we observe the human.
 
         Returns:
-        - list of [Environment, trajectories]
+        - tuple of (Environment, trajectories)
         '''
         
 
@@ -152,7 +175,10 @@ class EnvironmentDesign():
             n_trajectories=n_trajectories,
         )
 
-        return [(environment, trajectories)]
+        del agent_policy
+        del T_agent
+
+        return (environment, trajectories)
 
 
     def _sample_posterior(self,

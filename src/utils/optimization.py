@@ -2,12 +2,12 @@ import numpy as np
 import torch
 from numba import jit
 
-from .inference import (
-    likelihood,
-)  # to fix circular import we can not import log_likelihood_torch here TODO make this prettier
 
-# from .inference.likelihood import log_likelihood_torch
-
+def log_likelihood_torch(T, policy, trajectory):
+    log_likelihood = torch.tensor(0.0)
+    for s, a, next_s in trajectory[:-1]:
+        log_likelihood += torch.log(T[s, a, next_s] * policy[s, a])
+    return log_likelihood
 
 # @jit(nopython=True)
 def value_iteration_with_policy(
@@ -129,7 +129,7 @@ def grad_policy_maximization(
 
         mean_log_likelihood = torch.stack(
             [
-                likelihood.log_likelihood_torch(T_true, policy, traj)
+                log_likelihood_torch(T_true, policy, traj)
                 for traj in trajectories
             ]
         ).mean()

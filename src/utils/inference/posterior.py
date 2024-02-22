@@ -55,7 +55,7 @@ class PosteriorInference():
         '''
 
         num_episodes_recorded = len(self.expert_trajectories)
-        assert num_episodes <= num_episodes_recorded+1, f"episode is larger than number of available episodes. episode = {num_episodes}, number of played episodes = {num_episodes_recorded+1}"
+        assert num_episodes <= num_episodes_recorded, f"episode is larger than number of available episodes. episode = {num_episodes}, number of played episodes = {num_episodes_recorded}"
         del num_episodes_recorded
 
         self.posterior_distribution: dict = {}
@@ -73,6 +73,7 @@ class PosteriorInference():
 
             #Observations up to current episode.
             expert_trajectories = self.expert_trajectories[:episode]
+            print("used expert trajectories: ", expert_trajectories)
 
 
             #Calculate log-likelihood for each (p, gamma) sample.
