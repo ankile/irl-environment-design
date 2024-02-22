@@ -1,7 +1,10 @@
 from typing import List
 
+import os
 from tqdm import tqdm
 import numpy as np
+import pickle
+import datetime
 
 from .make_environment import transition_matrix, insert_walls_into_T
 from .optimization import soft_q_iteration, grad_policy_maximization, value_iteration_with_policy
@@ -87,6 +90,34 @@ class EnvironmentDesign():
 
             del observation
             print(f"Finished episode {episode}.")
+
+
+
+    def save(self, experiment_name: str):
+        '''
+        Save all relevant information of the EnvironmentDesign object to a file.
+
+        Args:
+        - experiment_name: name of the file to save the information to.
+        '''
+        todays_date = datetime.date.today().strftime('%d.%m.%Y')
+        current_time = datetime.datetime.now().strftime('%H:%M:%S')
+
+        data = {
+            'base_environment': self.base_environment,
+            'user_params': self.user_params,
+            'all_observations': self.all_observations,
+            'episodes': self.episodes
+        }
+
+        filepath = os.path.join(os.getcwd(), "checkpoints", experiment_name, todays_date)
+        filename = current_time
+        os.makedirs(filepath, exist_ok=True)
+        
+        with open(os.path.join(filepath, filename), 'wb+') as file:
+            pickle.dump(data, file)
+
+        del data, filepath, todays_date, current_time
 
 
     #TODO, this should be in make_environment.py, not here.

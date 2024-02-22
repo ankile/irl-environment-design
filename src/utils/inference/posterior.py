@@ -171,28 +171,59 @@ class PosteriorInference():
 
 
     def plot_statistics_over_time(self,
-                                  episode: int):
+                                  episode: int,
+                                true_params: ParamTuple):
         
         '''
         Plot the mean and MAP over episodes.
         '''    
 
-        self._validate_episode(episode=episode)
-
         #Statistics to plot.
         episodes = np.arange(episode+1)
         mean_per_episode = [self.mean(episode=i) for i in range(episode+1)]
         MAP_per_episode = [self.MAP(episode=i) for i in range(episode+1)]
-        prob_true_per_episode = [self.prob_true(episode=i, true_params=None) for i in range(episode+1)]
+        prob_true_per_episode = [self.prob_true(episode=i, true_params=true_params) for i in range(episode+1)]
+        prob_true_per_episode[0] = (0,0)
+
+        #Extract values.
+        mean_p_per_episode = [mean_per_episode[i].p for i in range(episode+1)]
+        mean_gamma_per_episode = [mean_per_episode[i].gamma for i in range(episode+1)]
+        MAP_p_per_episode = [MAP_per_episode[i].p for i in range(episode+1)]
+        MAP_gamma_per_episode = [MAP_per_episode[i].gamma for i in range(episode+1)]
+        prob_true_p_per_episode = [prob_true_per_episode[i][0] for i in range(episode+1)]
+        prob_true_gamma_per_episode = [prob_true_per_episode[i][1] for i in range(episode+1)]
+
 
         #Plot statistics.
-        plt.plot(episodes, mean_per_episode, label="Mean p")
-        plt.plot(episodes, MAP_per_episode, label="MAP p")
-        plt.plot(episodes, prob_true_per_episode, label="Probability of True Parameters")
-        plt.legend()
-        plt.xlabel("Episode")
-        plt.ylabel("Value")
-        plt.title("Statistics over Episodes")
+        # Create figure and plot the statistics.
+        fix, axs = plt.subplots(1, 3, figsize=(14, 3))
+        axs[0].plot(episodes, mean_p_per_episode, "x-", label="Mean")
+        axs[0].plot(episodes, MAP_p_per_episode, "o-", label="MAP")
+        axs[0].hlines(true_params.p, 0, episode, colors="r", label=f"True $p = {round(true_params.p,2)}$")
+        axs[0].legend(loc="lower right")
+        axs[0].set_xlabel("Episode")
+        axs[0].set_ylabel("Value")
+        axs[0].set_title("Statistics over Time for $p$")
+        axs[0].set_xticks(np.arange(0, episode+1, 1.0))
+
+        axs[1].plot(episodes, mean_gamma_per_episode, "x-", label="Mean")
+        axs[1].plot(episodes, MAP_gamma_per_episode, "o-", label="MAP")
+        axs[1].hlines(true_params.gamma, 0, episode, colors="r", label=f"True $\gamma = {round(true_params.gamma,2)}$")
+        axs[1].legend(loc="lower right")
+        axs[1].set_xlabel("Episode")
+        axs[1].set_ylabel("Value")
+        axs[1].set_title("Statistics over Time for $\gamma$")
+        axs[1].set_xticks(np.arange(0, episode+1, 1.0))
+
+        axs[2].plot(episodes, prob_true_p_per_episode, "x-", label="Prob. $p$ true")
+        axs[2].plot(episodes, prob_true_gamma_per_episode, "o-", label="Prob. $\gamma$ true")
+        axs[2].legend(loc="lower right")
+        axs[2].set_xlabel("Episode")
+        axs[2].set_ylabel("Probability")
+        axs[2].set_title("Probability of True Value over Time")
+        axs[2].set_xticks(np.arange(0, episode+1, 1.0))
+
+        plt.tight_layout()
         plt.show()
 
 
@@ -251,7 +282,12 @@ class PosteriorInference():
         posterior_distribution = self.posterior_distribution[f"episode={episode}"]
 
         total_probability = np.sum(posterior_distribution, axis=(0,1))
-        prob_p_true = np.sum(posterior_distribution[index_p_true,:])/total_probability
-        prob_gamma_true = np.sum(posterior_distribution[:,index_gamma_true])/total_probability
-        
-        return (prob_p_true, prob_gamma_true)
+
+        #Uniform prior.
+        if total_probability == 0:
+            return (0,0)
+        else:
+            prob_p_true = np.sum(posterior_distribution[index_p_true,:])/total_probability
+            prob_gamma_true = np.sum(posterior_distribution[:,index_gamma_true])/total_probability
+            
+            return (prob_p_true, prob_gamma_true)
