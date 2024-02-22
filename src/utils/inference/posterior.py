@@ -61,11 +61,17 @@ class PosteriorInference():
         self.posterior_distribution: dict = {}
 
         
-        for episode in range(num_episodes):
+        for episode in range(num_episodes+1):
 
             '''
             Calculate Posterior Distribution for observations.
             '''
+
+            if episode == 0:
+                print(f"Calculate posterior for episode {episode}, e.g. the prior distribution.")
+            else:
+                print(f"Calculate posterior for episode {episode}.")
+
 
             #Arrays to loop over and store results.
             log_likelihoods: np.ndarray = np.zeros(shape = (self.resolution, self.resolution))
@@ -73,7 +79,6 @@ class PosteriorInference():
 
             #Observations up to current episode.
             expert_trajectories = self.expert_trajectories[:episode]
-            print("used expert trajectories: ", expert_trajectories)
 
 
             #Calculate log-likelihood for each (p, gamma) sample.
@@ -91,7 +96,7 @@ class PosteriorInference():
             self.posterior_distribution[f"episode={episode}"] = log_likelihoods
 
 
-    def plot(self,
+    def plot_posterior(self,
              episode:int,
              param_values: ParamTuple=None,
              plot_mean: bool=True,
@@ -164,6 +169,11 @@ class PosteriorInference():
             plt.plot(index_gamma_MAP, index_p_MAP, "D", label = f"MAP: (p,$\gamma$)={round(MAP_params.p,2), round(MAP_params.gamma,2)}")
             plt.legend()
 
+
+    def plot_statistics_over_time(self,
+                                  episode: int)
+
+        self._validate_episode(episode=episode)
 
 
     def mean(self,

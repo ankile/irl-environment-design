@@ -37,6 +37,8 @@ class EnvironmentDesign():
         
         '''
         Run Environment Design for n_episodes episodes.
+        An episode is defined as observing the agent in an environment. We always observe the agent in the base environment first.
+        Then, we perform Environment Design. Thereby, if n_episodes = n, we perform Environment Design n-1 times. 
 
         Args:
         - n_episodes: number of episodes to run environment design for.
@@ -50,9 +52,9 @@ class EnvironmentDesign():
         observation = self._observe_human(environment=self.base_environment, n_trajectories=2)
         self.all_observations.append(observation)
 
-        for episode in range(self.episodes):
+        for episode in range(self.episodes-1):
         
-            print(f"Started episode {episode}")
+            print(f"Started episode {episode}.")
             #Generate Candidate Environments.
             candidate_environments = self._generate_candidate_environments(num_candidate_environments=candidate_environments_args["n_environments"],
                                                   generate_how=candidate_environments_args["generate_how"],
@@ -66,7 +68,8 @@ class EnvironmentDesign():
                                      posterior_samples=samples,
                                      n_traj_per_sample=1,
                                      candidate_envs=candidate_environments,
-                                     how=bayesian_regret_how)
+                                     how=bayesian_regret_how
+                                     )
             
             del samples
             del candidate_environments
@@ -81,6 +84,7 @@ class EnvironmentDesign():
             self.all_observations.append(observation)
 
             del observation
+            print(f"Finished episode {episode}.")
 
 
     #TODO, this should be in make_environment.py, not here.
@@ -113,6 +117,7 @@ class EnvironmentDesign():
                     goal_states=self.base_environment.goal_states,
                     wall_states=self.base_environment.wall_states,
                     n_walls=self.base_environment.n_walls,
+                    R_true=self.base_environment.R_true
                 )
                 for _ in range(self.num_candidate_environments)
             ]
@@ -152,7 +157,7 @@ class EnvironmentDesign():
         
         '''
         Observe human in an environment n_trajectories times.
-
+R_sample
         Args:
         - environment: environment in which we observe the human.
         - n_trajectories: number of times we observe the human.
@@ -350,22 +355,21 @@ class EnvironmentDesign():
 
                     #if we dont want to learn some parameter, we overwrite the sample with the true value
                     if agent_p is not None:
-                        p = agent_p
+                        p_sample = agent_p
                     if agent_gamma is not None:
-                        gamma = agent_gamma
+                        gamma_sample = agent_gamma
                     if agent_R is not None:
-                        R = agent_R
+                        R_sample = agent_R
 
                     #agents transition function according to p_sample
                     T_agent = transition_matrix(candidate_env.N, candidate_env.M, p=p_sample, absorbing_states=candidate_env.goal_states)
                     T_agent = insert_walls_into_T(T_agent, wall_indices=candidate_env.wall_states)
-
-                    V, _ = value_iteration_with_policy(R_sample, T_agent, gamma_sample)
+                    V, _ = value_iteration_with_policy(candidate_env.R_true, T_agent, gamma_sample)
                     regret += V[0] / len(posterior_samples)
                     # print("regret: ", regret)
 
                 # calculate regret for one policy across all samples
-                R_sample_mean = np.mean([sample[2] for sample in posterior_samples], axis=0)
+                # R_sample_mean = np.mean([sample[2] for sample in posterior_samples], axis=0)
                 p_sample_mean = np.mean([sample[1] for sample in posterior_samples], axis = 0)
                 gamma_sample_mean = np.mean(
                     [sample[0] for sample in posterior_samples], axis=0
@@ -374,7 +378,7 @@ class EnvironmentDesign():
                 T_agent_mean = transition_matrix(candidate_env.N, candidate_env.M, p=p_sample_mean, absorbing_states=candidate_env.goal_states)
                 T_agent_mean = insert_walls_into_T(T_agent_mean, wall_indices=candidate_env.wall_states)
                 V_mean, _ = value_iteration_with_policy(
-                    R_sample_mean, T_agent_mean, gamma_sample_mean
+                    candidate_env.R_true, T_agent_mean, gamma_sample_mean
                 )
 
                 regret -= V_mean[0]
@@ -387,7 +391,7 @@ class EnvironmentDesign():
 
                 candidate_env.id = candidate_env_id
                 candidate_env_id += 1
-                candidate_env.R_sample_mean = R_sample_mean
+                # candidate_env.R_sample_mean = R_sample_mean
 
             # 5. Return the environments (ordered by regret, with higest regret first)
             if return_sorted:
