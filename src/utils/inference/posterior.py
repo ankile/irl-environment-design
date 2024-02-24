@@ -68,9 +68,9 @@ class PosteriorInference():
             '''
 
             if episode == 0:
-                print(f"Calculate posterior for episode {episode}, e.g. the prior distribution.")
+                print(f"Calculate distribution of episode {episode}, e.g. the prior distribution.")
             else:
-                print(f"Calculate posterior for episode {episode}.")
+                print(f"Calculate distribution of episode {episode}.")
 
 
             #Arrays to loop over and store results.
@@ -139,7 +139,7 @@ class PosteriorInference():
             #Show probability of true parameters.
             if show_true_prob:
                 prob_true = self.prob_true(episode=episode, true_params=param_values)
-                plt.plot(index_gamma_true, index_p_true, "D", label = f"True: (p,$\gamma$)={param_values.p,param_values.gamma}" + r", $\mathbb{P}$" + f"={round(prob_true,4)}")
+                plt.plot(index_gamma_true, index_p_true, "D", label = f"True: (p,$\gamma$)={param_values.p,param_values.gamma}" + r", $\mathbb{P}$" + f"=({round(prob_true[0],2), round(prob_true[1],2)})")
 
             else:
 
@@ -190,38 +190,36 @@ class PosteriorInference():
         mean_gamma_per_episode = [mean_per_episode[i].gamma for i in range(episode+1)]
         MAP_p_per_episode = [MAP_per_episode[i].p for i in range(episode+1)]
         MAP_gamma_per_episode = [MAP_per_episode[i].gamma for i in range(episode+1)]
+        MAP_p_per_episode[0] = 0.5 #MAP of the prior distribution, so doesn't mean anything. TODO make this clearer.
+        MAP_gamma_per_episode[0] = 0.5
         prob_true_p_per_episode = [prob_true_per_episode[i][0] for i in range(episode+1)]
         prob_true_gamma_per_episode = [prob_true_per_episode[i][1] for i in range(episode+1)]
 
 
         #Plot statistics.
         # Create figure and plot the statistics.
-        fix, axs = plt.subplots(1, 3, figsize=(14, 3))
-        axs[0].plot(episodes, mean_p_per_episode, "x-", label="Mean")
-        axs[0].plot(episodes, MAP_p_per_episode, "o-", label="MAP")
-        axs[0].hlines(true_params.p, 0, episode, colors="r", label=f"True $p = {round(true_params.p,2)}$")
-        axs[0].legend(loc="lower right")
+        fix, axs = plt.subplots(1, 2, figsize=(14, 3))
+        axs[0].hlines(true_params.p, 0, episode, colors="red", linestyle='dashed', label=f"True $p = {round(true_params.p,2)}$")
+        axs[0].plot(episodes, mean_p_per_episode, "x-", color="red", label="Mean $p$")
+        axs[0].plot(episodes, MAP_p_per_episode, "o-", color="red", label="MAP $p$")
         axs[0].set_xlabel("Episode")
         axs[0].set_ylabel("Value")
-        axs[0].set_title("Statistics over Time for $p$")
+        axs[0].set_title("Statistics over Time for $p$ (red) and $\gamma$ (blue).")
         axs[0].set_xticks(np.arange(0, episode+1, 1.0))
 
-        axs[1].plot(episodes, mean_gamma_per_episode, "x-", label="Mean")
-        axs[1].plot(episodes, MAP_gamma_per_episode, "o-", label="MAP")
-        axs[1].hlines(true_params.gamma, 0, episode, colors="r", label=f"True $\gamma = {round(true_params.gamma,2)}$")
+        axs[0].hlines(true_params.gamma, 0, episode, colors="blue", linestyle='dashed', label=f"True $\gamma = {round(true_params.gamma,2)}$")
+        axs[0].plot(episodes, mean_gamma_per_episode, "x-", color="blue", label="Mean $\gamma$")
+        axs[0].plot(episodes, MAP_gamma_per_episode, "o-", color="blue", label="MAP $\gamma$")
+        axs[0].legend(loc="lower right", ncol=2)
+
+
+        axs[1].plot(episodes, prob_true_p_per_episode, "x-", color = "red", label="Prob. $p$ true")
+        axs[1].plot(episodes, prob_true_gamma_per_episode, "o-", color = "blue", label="Prob. $\gamma$ true")
         axs[1].legend(loc="lower right")
         axs[1].set_xlabel("Episode")
-        axs[1].set_ylabel("Value")
-        axs[1].set_title("Statistics over Time for $\gamma$")
+        axs[1].set_ylabel("Probability")
+        axs[1].set_title("Probability of True Values $p$ (red) and $\gamma$ (blue) over Time.")
         axs[1].set_xticks(np.arange(0, episode+1, 1.0))
-
-        axs[2].plot(episodes, prob_true_p_per_episode, "x-", label="Prob. $p$ true")
-        axs[2].plot(episodes, prob_true_gamma_per_episode, "o-", label="Prob. $\gamma$ true")
-        axs[2].legend(loc="lower right")
-        axs[2].set_xlabel("Episode")
-        axs[2].set_ylabel("Probability")
-        axs[2].set_title("Probability of True Value over Time")
-        axs[2].set_xticks(np.arange(0, episode+1, 1.0))
 
         plt.tight_layout()
         plt.show()

@@ -50,6 +50,7 @@ class EnvironmentDesign():
         '''
         
         self.episodes = n_episodes
+        self.candidate_environments_args = candidate_environments_args
 
         #Observe human in base environment. Append observation to all observations.
         print("Started episode 0.")
@@ -63,10 +64,12 @@ class EnvironmentDesign():
             #Generate Candidate Environments.
             candidate_environments = self._generate_candidate_environments(num_candidate_environments=candidate_environments_args["n_environments"],
                                                   generate_how=candidate_environments_args["generate_how"],
-                                                  random_envs_specs=candidate_environments_args)
+                                                  candidate_env_specs=candidate_environments_args)
             
             #Generate Samples from current belief.
-            samples = self._sample_posterior(observations=self.all_observations)
+            samples = self._sample_posterior(observations=self.all_observations,
+                                             sample_size=250,
+                                             burnin=150)
 
             #Find maximum Bayesian Regret environment.
             candidate_environments_sorted = self._environment_search(base_environment=self.base_environment,
@@ -107,13 +110,14 @@ class EnvironmentDesign():
             'base_environment': self.base_environment,
             'user_params': self.user_params,
             'all_observations': self.all_observations,
-            'episodes': self.episodes
+            'episodes': self.episodes,
+            'candidate_environment_args': self.candidate_environments_args
         }
 
         filepath = os.path.join(os.getcwd(), "checkpoints", experiment_name, todays_date)
         filename = current_time
         os.makedirs(filepath, exist_ok=True)
-        
+
         with open(os.path.join(filepath, filename), 'wb+') as file:
             pickle.dump(data, file)
 
@@ -124,7 +128,7 @@ class EnvironmentDesign():
     def _generate_candidate_environments(self,
                                         num_candidate_environments: int,
                                         generate_how: str,
-                                        random_envs_specs: dict):
+                                        candidate_env_specs: dict):
         
         '''
         Generate candidate environments for the Bayesian Regret calculation.
@@ -138,7 +142,7 @@ class EnvironmentDesign():
 
 
             #Number of walls to insert.
-            n_walls = random_envs_specs["n_walls"]
+            n_walls = candidate_env_specs["n_walls"]
 
 
             #Generate copies of base enviroment.
@@ -177,6 +181,10 @@ class EnvironmentDesign():
 
             return candidate_envs
         
+        elif generate_how == "hard_coded_envs":
+
+            return candidate_env_specs["candidate_envs"]
+        
 
         else:
         
@@ -190,7 +198,6 @@ class EnvironmentDesign():
         
         '''
         Observe human in an environment n_trajectories times.
-R_sample
         Args:
         - environment: environment in which we observe the human.
         - n_trajectories: number of times we observe the human.
