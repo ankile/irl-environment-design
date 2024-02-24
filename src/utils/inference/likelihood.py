@@ -1,5 +1,4 @@
 import numpy as np
-import torch
 
 from ..constants import ParamTuple, StateTransition, beta_agent
 from ..make_environment import Environment, transition_matrix, insert_walls_into_T
@@ -23,13 +22,6 @@ def compute_log_likelihood(T, policy, trajectory):
             pass
         else:
             log_likelihood += np.log(T[s, a, next_s] * policy[s, a])
-    return log_likelihood
-
-
-def log_likelihood_torch(T, policy, trajectory):
-    log_likelihood = torch.tensor(0.0)
-    for s, a, next_s in trajectory[:-1]:
-        log_likelihood += torch.log(T[s, a, next_s] * policy[s, a])
     return log_likelihood
 
 
