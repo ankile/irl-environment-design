@@ -19,7 +19,7 @@ from src.worlds.mdp2d import Experiment_2D
 import src.worlds.mdp2d as mdp2d
 
 
-ExperimentResult = namedtuple("ExperimentResult", ["data", "p2idx", "probs"])
+ExperimentResult = namedtuple("ExperimentResult", ["data", "p2idx", "pidx2states"])
 
 
 
@@ -81,8 +81,8 @@ def calculate_behavior_map(
     """
 
     data = np.zeros((len(probs), len(gammas)), dtype=np.int32)
-    policies = {}
     p2idx: Dict[str, int] = {}
+    p2states: Dict[int, set] = {}
 
     if goal_states is None:
         goal_states = get_all_absorbing_states(experiment.mdp)
@@ -112,7 +112,7 @@ def calculate_behavior_map(
         )
 
 
-        policy_str = follow_policy(
+        policy_str, policy_states = follow_policy(
             experiment.mdp.policy,
             height=experiment.height,
             width=experiment.width,
@@ -132,6 +132,7 @@ def calculate_behavior_map(
         if policy_rollouts == set():
             #First iteration, no equivalent policies yet.
             p2idx[policy_str] = idx_policy
+            p2states[idx_policy] = policy_states
             idx_policy += 1
 
         else:
@@ -153,12 +154,14 @@ def calculate_behavior_map(
                     equivalent_policy_exists = True
                     equivalent_policy_rollout = policy_rollout
                     equivalent_policy_rollout_idx = p2idx[equivalent_policy_rollout]
+                    # equivalent_policy_states = p2states[equivalent_policy_rollout]
                     break
 
 
             if not equivalent_policy_exists:
                 #There exists no equivalent policy, so new policy index is created
                 p2idx[policy_str] = idx_policy
+                p2states[idx_policy] = policy_states
                 idx_policy += 1
 
         #Update which policy sample (i,j) used.
@@ -171,7 +174,7 @@ def calculate_behavior_map(
 
 
 
-    return ExperimentResult(data, p2idx, None)
+    return ExperimentResult(data, p2idx, p2states)
 
 
 def run_one_world(

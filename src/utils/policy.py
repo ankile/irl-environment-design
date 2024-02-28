@@ -25,8 +25,7 @@ def follow_policy(policy, height, width, initial_state, goal_states):
             row = min(height - 1, row + 1)
 
         state = row * width + col
-
-    return "".join(actions_taken)
+    return "".join(actions_taken), seen_states
 
 
 def get_all_absorbing_states(mdp: MDP_2D):
