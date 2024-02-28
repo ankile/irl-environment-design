@@ -121,15 +121,13 @@ def calculate_behavior_map(
         )
 
         #Get all previous rollouts/ policies.
-        policy_rollouts = policies.values()
+        policy_rollouts = p2idx.keys()
         #Get only unique ones
         policy_rollouts = set(policy_rollouts)
-        # print("Current Policy Rollouts:", policy_rollouts)
 
-        policies[(prob, gamma)] = policy_str
-        # if policy_str not in p2idx:
-        #     p2idx[policy_str] = len(p2idx)
 
+        #We initialize the equivalent policy as the current policy. If there exists an equivalent one, we later overwrite it.
+        equivalent_policy_exists: bool = False
 
         if policy_rollouts == set():
             #First iteration, no equivalent policies yet.
@@ -137,6 +135,8 @@ def calculate_behavior_map(
             idx_policy += 1
 
         else:
+
+            #We initialize the equivalent policy as the current policy. If there exists an equivalent one, we later overwrite it.
             equivalent_policy_exists: bool = False
             for policy_rollout in policy_rollouts:
 
@@ -152,21 +152,23 @@ def calculate_behavior_map(
                     # print("P2idx: ", p2idx)
                     equivalent_policy_exists = True
                     equivalent_policy_rollout = policy_rollout
+                    equivalent_policy_rollout_idx = p2idx[equivalent_policy_rollout]
                     break
 
 
-            if equivalent_policy_exists:
-                    #An equivalent policy exists. So, we index of the current policy is the same as
-                    # the index of the equivalent policy
-                    p2idx[policy_str] = p2idx[equivalent_policy_rollout]
-
-            else:
+            if not equivalent_policy_exists:
                 #There exists no equivalent policy, so new policy index is created
                 p2idx[policy_str] = idx_policy
                 idx_policy += 1
 
         #Update which policy sample (i,j) used.
-        data[i, j] = p2idx[policy_str]
+        if equivalent_policy_exists:
+            data[i, j] = equivalent_policy_rollout_idx
+
+        else:
+            data[i, j] = p2idx[policy_str]
+
+
 
 
     return ExperimentResult(data, p2idx, None)
