@@ -69,7 +69,7 @@ def calculate_behavior_map(
     # reward_params_a: np.ndarray = None,
     # reward_params_b: np.ndarray = None,
     # realized_probs_indices: list | None = None,
-    goal_states: set | None = None,
+    # goal_states: set | None = None,
 ) -> ExperimentResult:
     """
     Run an experiment with a given set of parameters and return the results.
@@ -84,8 +84,8 @@ def calculate_behavior_map(
     p2idx: Dict[str, int] = {}
     p2states: Dict[int, set] = {}
 
-    if goal_states is None:
-        goal_states = get_all_absorbing_states(experiment.mdp)
+    # if goal_states is None:
+    #     goal_states = get_all_absorbing_states(experiment.mdp)
 
     #Index for current policy, increased by 1 for each new policy.
     idx_policy = 0
@@ -117,7 +117,7 @@ def calculate_behavior_map(
             height=experiment.height,
             width=experiment.width,
             initial_state=start_state,
-            goal_states=goal_states,
+            goal_states=experiment.absorbing_states,
         )
 
         #Get all previous rollouts/ policies.
