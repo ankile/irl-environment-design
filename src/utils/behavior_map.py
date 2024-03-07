@@ -29,6 +29,7 @@ def plot_bmap(
     probs: np.ndarray,
     start_state=0,
     ax=None,
+    plot:bool = False
 ):
     result = calculate_behavior_map(
         experiment=world,
@@ -40,21 +41,23 @@ def plot_bmap(
 
     data = result.data
 
-    if ax is None:
-        _, ax = plt.subplots(figsize=(4, 4))
+    if plot:
 
-    make_general_strategy_heatmap(
-        results=data,
-        probs=probs,
-        p2idx=None,
-        title=f"",
-        ax=ax,
-        gammas=gammas,
-        annot=False,
-        ax_labels=False,
-        num_ticks=5,
-        legend=False
-    )
+        if ax is None:
+            _, ax = plt.subplots(figsize=(4, 4))
+
+        make_general_strategy_heatmap(
+            results=data,
+            probs=probs,
+            p2idx=None,
+            title=f"",
+            ax=ax,
+            gammas=gammas,
+            annot=False,
+            ax_labels=False,
+            num_ticks=5,
+            legend=False
+        )
     return result
 
 
@@ -82,10 +85,8 @@ def calculate_behavior_map(
 
     data = np.zeros((len(probs), len(gammas)), dtype=np.int32)
     p2idx: Dict[str, int] = {}
-    p2states: Dict[int, set] = {}
+    pidx2states: Dict[list, int] = {}
 
-    # if goal_states is None:
-    #     goal_states = get_all_absorbing_states(experiment.mdp)
 
     #Index for current policy, increased by 1 for each new policy.
     idx_policy = 0
@@ -120,25 +121,21 @@ def calculate_behavior_map(
             goal_states=experiment.absorbing_states,
         )
 
-        #Get all previous rollouts/ policies.
-        policy_rollouts = p2idx.keys()
-        #Get only unique ones
-        policy_rollouts = set(policy_rollouts)
-
-
-        #We initialize the equivalent policy as the current policy. If there exists an equivalent one, we later overwrite it.
         equivalent_policy_exists: bool = False
-
-        if policy_rollouts == set():
+        
+        if pidx2states == {}:
             #First iteration, no equivalent policies yet.
             p2idx[policy_str] = idx_policy
-            p2states[idx_policy] = policy_states
+            pidx2states[idx_policy] = policy_states
             idx_policy += 1
 
+
         else:
+        
+            #Get all previous rollouts/ policies.
+            policy_rollouts = pidx2states.values()
 
             #We initialize the equivalent policy as the current policy. If there exists an equivalent one, we later overwrite it.
-            equivalent_policy_exists: bool = False
             for policy_rollout in policy_rollouts:
 
                 #Check if there exists an equivalent policy already. Here, we define equivalent as
@@ -147,21 +144,20 @@ def calculate_behavior_map(
                 # We can test equality up to a permutation more efficiently by testing whether the policies have
                 #the same length and whether the policies arrive in the same goal state.
 
-                if (len(policy_rollout) == len(policy_str)) and (policy_rollout[-1] == policy_str[-1]):
+                if (len(policy_rollout) == len(policy_states)) and (policy_rollout[-1] == policy_states[-1]):
                     # Check whether there exists an equivalent policy (up to permutation).
-                    # print(f"Policy has been seen before. Current policy: {policy_str}, Equivalent Policy: {policy_rollout}")
-                    # print("P2idx: ", p2idx)
                     equivalent_policy_exists = True
                     equivalent_policy_rollout = policy_rollout
-                    equivalent_policy_rollout_idx = p2idx[equivalent_policy_rollout]
-                    # equivalent_policy_states = p2states[equivalent_policy_rollout]
+
+                    #Get index of equivalent policy.
+                    equivalent_policy_rollout_idx = list(pidx2states.keys())[list(pidx2states.values()).index(equivalent_policy_rollout)]
                     break
 
 
             if not equivalent_policy_exists:
                 #There exists no equivalent policy, so new policy index is created
                 p2idx[policy_str] = idx_policy
-                p2states[idx_policy] = policy_states
+                pidx2states[idx_policy] = policy_states
                 idx_policy += 1
 
         #Update which policy sample (i,j) used.
@@ -174,7 +170,7 @@ def calculate_behavior_map(
 
 
 
-    return ExperimentResult(data, p2idx, p2states)
+    return ExperimentResult(data, p2idx, pidx2states)
 
 
 def run_one_world(
