@@ -69,8 +69,8 @@ def plot_environment(reward_function, wall_states, start_state=(0, 0), ax=None,
         elif (i, j) in wall_states:
             # Add a dark gray rectangle to represent the wall
             ax.add_patch(Rectangle((j - 0.5, i - 0.5), 1, 1, color="darkgray"))
-        elif val != 0 and annotate:
-            ax.text(j, i, f"{round(val, 1):g}", va="center", ha="center", color="white")
+        # elif val != 0 and annotate:
+        ax.text(j, i, f"{round(val, 1):g}", va="center", ha="center", color="white")
     ax.text(0,0, "S", va="center", ha="center", color="white")
     ax.set_title(f"{title}")
 
