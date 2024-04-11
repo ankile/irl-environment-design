@@ -19,7 +19,7 @@ from src.worlds.mdp2d import Experiment_2D
 import src.worlds.mdp2d as mdp2d
 
 
-ExperimentResult = namedtuple("ExperimentResult", ["data", "p2idx", "probs"])
+ExperimentResult = namedtuple("ExperimentResult", ["data", "p2idx", "pidx2states"])
 
 
 
@@ -29,6 +29,7 @@ def plot_bmap(
     probs: np.ndarray,
     start_state=0,
     ax=None,
+    plot:bool = False
 ):
     result = calculate_behavior_map(
         experiment=world,
@@ -40,21 +41,23 @@ def plot_bmap(
 
     data = result.data
 
-    if ax is None:
-        _, ax = plt.subplots(figsize=(4, 4))
+    if plot:
 
-    make_general_strategy_heatmap(
-        results=data,
-        probs=probs,
-        p2idx=None,
-        title=f"",
-        ax=ax,
-        gammas=gammas,
-        annot=False,
-        ax_labels=False,
-        num_ticks=5,
-        legend=False
-    )
+        if ax is None:
+            _, ax = plt.subplots(figsize=(4, 4))
+
+        make_general_strategy_heatmap(
+            results=data,
+            probs=probs,
+            p2idx=None,
+            title=f"",
+            ax=ax,
+            gammas=gammas,
+            annot=False,
+            ax_labels=False,
+            num_ticks=5,
+            legend=False
+        )
     return result
 
 
@@ -69,7 +72,7 @@ def calculate_behavior_map(
     # reward_params_a: np.ndarray = None,
     # reward_params_b: np.ndarray = None,
     # realized_probs_indices: list | None = None,
-    goal_states: set | None = None,
+    # goal_states: set | None = None,
 ) -> ExperimentResult:
     """
     Run an experiment with a given set of parameters and return the results.
@@ -81,11 +84,9 @@ def calculate_behavior_map(
     """
 
     data = np.zeros((len(probs), len(gammas)), dtype=np.int32)
-    policies = {}
     p2idx: Dict[str, int] = {}
+    pidx2states: Dict[list, int] = {}
 
-    if goal_states is None:
-        goal_states = get_all_absorbing_states(experiment.mdp)
 
     #Index for current policy, increased by 1 for each new policy.
     idx_policy = 0
@@ -112,32 +113,29 @@ def calculate_behavior_map(
         )
 
 
-        policy_str = follow_policy(
+        policy_str, policy_states = follow_policy(
             experiment.mdp.policy,
             height=experiment.height,
             width=experiment.width,
             initial_state=start_state,
-            goal_states=goal_states,
+            goal_states=experiment.absorbing_states,
         )
 
-        #Get all previous rollouts/ policies.
-        policy_rollouts = policies.values()
-        #Get only unique ones
-        policy_rollouts = set(policy_rollouts)
-        # print("Current Policy Rollouts:", policy_rollouts)
-
-        policies[(prob, gamma)] = policy_str
-        # if policy_str not in p2idx:
-        #     p2idx[policy_str] = len(p2idx)
-
-
-        if policy_rollouts == set():
+        equivalent_policy_exists: bool = False
+        
+        if pidx2states == {}:
             #First iteration, no equivalent policies yet.
             p2idx[policy_str] = idx_policy
+            pidx2states[idx_policy] = policy_states
             idx_policy += 1
 
+
         else:
-            equivalent_policy_exists: bool = False
+        
+            #Get all previous rollouts/ policies.
+            policy_rollouts = pidx2states.values()
+
+            #We initialize the equivalent policy as the current policy. If there exists an equivalent one, we later overwrite it.
             for policy_rollout in policy_rollouts:
 
                 #Check if there exists an equivalent policy already. Here, we define equivalent as
@@ -146,30 +144,33 @@ def calculate_behavior_map(
                 # We can test equality up to a permutation more efficiently by testing whether the policies have
                 #the same length and whether the policies arrive in the same goal state.
 
-                if (len(policy_rollout) == len(policy_str)) and (policy_rollout[-1] == policy_str[-1]):
+                if (len(policy_rollout) == len(policy_states)) and (policy_rollout[-1] == policy_states[-1]):
                     # Check whether there exists an equivalent policy (up to permutation).
-                    # print(f"Policy has been seen before. Current policy: {policy_str}, Equivalent Policy: {policy_rollout}")
-                    # print("P2idx: ", p2idx)
                     equivalent_policy_exists = True
                     equivalent_policy_rollout = policy_rollout
+
+                    #Get index of equivalent policy.
+                    equivalent_policy_rollout_idx = list(pidx2states.keys())[list(pidx2states.values()).index(equivalent_policy_rollout)]
                     break
 
 
-            if equivalent_policy_exists:
-                    #An equivalent policy exists. So, we index of the current policy is the same as
-                    # the index of the equivalent policy
-                    p2idx[policy_str] = p2idx[equivalent_policy_rollout]
-
-            else:
+            if not equivalent_policy_exists:
                 #There exists no equivalent policy, so new policy index is created
                 p2idx[policy_str] = idx_policy
+                pidx2states[idx_policy] = policy_states
                 idx_policy += 1
 
         #Update which policy sample (i,j) used.
-        data[i, j] = p2idx[policy_str]
+        if equivalent_policy_exists:
+            data[i, j] = equivalent_policy_rollout_idx
+
+        else:
+            data[i, j] = p2idx[policy_str]
 
 
-    return ExperimentResult(data, p2idx, None)
+
+
+    return ExperimentResult(data, p2idx, pidx2states)
 
 
 def run_one_world(

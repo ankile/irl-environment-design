@@ -5,12 +5,12 @@ def follow_policy(policy, height, width, initial_state, goal_states):
     action_dict = {0: "L", 1: "R", 2: "U", 3: "D"}
     state = initial_state
     actions_taken = []
-    seen_states = set()
+    seen_states = []
 
     while len(seen_states) == 0 or (
         state not in goal_states and state not in seen_states
     ):
-        seen_states.add(state)
+        seen_states.append(state)
         row, col = state // width, state % width
         action = policy[row, col]
         actions_taken.append(action_dict[action])
@@ -26,7 +26,9 @@ def follow_policy(policy, height, width, initial_state, goal_states):
 
         state = row * width + col
 
-    return "".join(actions_taken)
+    #Add goal state to seen states.
+    seen_states.append(state)
+    return "".join(actions_taken), seen_states
 
 
 def get_all_absorbing_states(mdp: MDP_2D):

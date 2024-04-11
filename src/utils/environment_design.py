@@ -185,6 +185,9 @@ class EnvironmentDesign():
 
             return candidate_env_specs["candidate_envs"]
         
+        elif generate_how == "Naive_BM":
+            
+        
 
         else:
         
