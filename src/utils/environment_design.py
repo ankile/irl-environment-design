@@ -72,12 +72,17 @@ class EnvironmentDesign():
 
             if candidate_environments_args["generate_how"] == "entropy_BM":
 
+
                 #TODO min/ max values need to be inferred from ROI.
+                min_gamma = 0.7
+                max_gamma = 0.99
+                min_p = 0.7
+                max_p = 0.99
                 pos_inference = PosteriorInference(self.all_observations,
-                                                   min_gamma = 0.7,
-                                                   max_gamma = 0.99,
-                                                   min_p = 0.7,
-                                                   max_p = 0.7)
+                                                   min_gamma = min_gamma,
+                                                   max_gamma = max_gamma,
+                                                   min_p = min_p,
+                                                   max_p = max_p)
                 
                 current_belief = pos_inference.calculate_posterior(episode=episode)
                 mean_params = pos_inference.mean(posterior_dist = current_belief)
@@ -89,7 +94,12 @@ class EnvironmentDesign():
                 if "T" not in self.learn_what:
                     mean_params.T = self.user_params.T
 
-                entropy_bm = EntropyBM(estimate_R = mean_params.R)
+
+                entropy_bm = EntropyBM(parameter_estimates=mean_params,
+                                       gammas = np.linspace(min_gamma, max_gamma, num=15),
+                                       probs= np.linspace(min_p, max_p, num=15))
+                
+                
 
 
 
