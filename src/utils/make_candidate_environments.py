@@ -2,16 +2,21 @@ from copy import deepcopy
 
 import matplotlib.pyplot as plt
 import numpy as np
+import torch
+from scipy import stats
 
 import src.utils.behavior_map as bm
 from src.worlds.mdp2d import Experiment_2D
 from src.utils.make_environment import insert_walls_into_T
+from src.utils.optimization import differentiate_V
 
 
 
 '''
 Functions to generate candidate environments.
 '''
+
+
 
 def make_world(
     height: int,
@@ -34,6 +39,140 @@ def make_world(
     )
 
     return experiment
+
+
+class EntropyBM():
+
+    '''
+    
+    '''
+
+    def __init__(self, parameter_estimates, gammas, probs) -> None:
+
+        self.estimate_R = parameter_estimates.R
+        self.estimate_gamma = parameter_estimates.gamma
+        self.estimate_T = parameter_estimates.T
+
+        self.gammas = gammas
+        self.probs = probs
+
+
+    def compute_covers(self, bm_out):
+
+        '''
+        Computes the entropy of the Behavior Map and for each behavior in the behavior map the proportion of the BM that is covered by the respective Behavior.
+
+        Args:
+        - bm_out (dict): The output of the behavior map function.
+
+        Returns:
+        - covers (dict): A dictionary containing the proportion of the BM that is covered by the respective Behavior.
+        - max_ent_cover (float): The proportion of the BM that would be covered by each behavior in the case of maximum entropy.
+        '''
+
+        _behaviors = np.unique(bm_out.data)
+        n_behavior_samples = bm_out.data.size
+        covers = {}
+
+        for b in _behaviors:
+            covers[b] = np.sum(bm_out.data == b) / n_behavior_samples
+
+        max_ent_cover = 1/len(_behaviors)
+
+        return covers, max_ent_cover
+    
+
+    def gradient_updates_R(self, R_init, bm_out, stepsize: float = 0.001, n_iterations: int = 20):
+
+        '''
+        Perform gradient updates on the reward function R to maximize the entropy of the behavior map.
+
+        Args:
+        - world (Experiment_2D): The world in which the agent is acting.
+        - bm_out (dict): The output of the behavior map function.
+        - stepsize (float): The stepsize of the gradient updates.
+        - n_iterations (int): The number of iterations to run.
+
+        Returns:
+        - R (torch.tensor): The updated reward function R.
+        '''
+
+        covers, max_ent_cover = self.compute_covers(bm_out)
+
+        # Initialize learning parameters
+        R = torch.tensor(R_init, dtype=torch.float32)
+        gamma = torch.tensor(self.estimate_gamma, dtype=torch.float32)
+        T = torch.tensor(self.estimate_T, dtype=torch.float32)
+        V_star = torch.zeros_like(R)
+
+        for _ in range(n_iterations):
+
+
+            # Compute the gradient of the value function with respect to the reward function and the transition matrix.
+            V_star, R_grad_out, _ = differentiate_V(R = R, gamma = gamma, T = T, V = V_star)
+
+
+            # Update the reward function
+            for behavior_idx in covers:
+
+                cover = covers[behavior_idx]
+                _visited_states = bm_out.pidx2states[behavior_idx]
+                _visited_states = _visited_states[:-1]
+
+                _masked_gradient_R = torch.zeros_like(R_grad_out)
+                _masked_gradient_R[_visited_states] = R_grad_out[_visited_states]
+
+                if cover > max_ent_cover:
+                    #Inhibit Behavior.
+                    R = R - stepsize * _masked_gradient_R
+                    
+
+                else:
+                    #Excite Behavior.
+                    R = R + stepsize * _masked_gradient_R
+
+        return R
+    
+    def BM_search(self, world, n_compute_BM: int, n_iterations_gradient: int = 20, stepsize_gradient: float = 0.01):
+
+        '''
+        Find a reward function that maximizes the entropy of the Behavior Map.
+
+        Args:
+        TODO    
+        '''
+
+        _world = deepcopy(world)
+        R = _world.rewards
+        _max_ent = -np.inf
+        max_ent_R = _world.rewards
+
+        for i in range(n_compute_BM):
+
+            print(f"Computing BM {i} of {n_compute_BM}")
+
+            # Compute Behavior Map
+            bm_out = bm.plot_bmap(world=_world, gammas=self.gammas, probs=self.probs)
+
+            #Compute entropy of BM
+            cover, max_ent_prob = self.compute_covers(bm_out)
+            entropy_BM = stats.entropy(list(cover.values()))
+
+            #Check if the current Behavior Map has higher entropy.
+            if entropy_BM > _max_ent:
+                max_ent_possible = stats.entropy(np.repeat(max_ent_prob, repeats=int(1/max_ent_prob)))
+                print(f"New Maximum Entropy Reward Function! Entropy: {entropy_BM}. Maximum Entropy possible: {max_ent_possible}.")
+                _max_ent = entropy_BM
+                max_ent_R = R
+
+            # Perform Gradient Updates on Reward Function to maximize entropy of BM.
+            R = self.gradient_updates_R(R_init = R, bm_out=bm_out, stepsize=stepsize_gradient, n_iterations=n_iterations_gradient)
+
+            #Update Reward Function
+            _world.rewards = R.detach().numpy()
+
+        return max_ent_R
+        
 
 
 class AgnosticsBM():

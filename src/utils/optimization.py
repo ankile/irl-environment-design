@@ -9,6 +9,7 @@ def log_likelihood_torch(T, policy, trajectory):
         log_likelihood += torch.log(T[s, a, next_s] * policy[s, a])
     return log_likelihood
 
+
 # @jit(nopython=True)
 def value_iteration_with_policy(
     R: np.ndarray,
@@ -145,3 +146,71 @@ def grad_policy_maximization(
     policy = torch.softmax(Q.detach(), dim=1)
 
     return policy.numpy()
+
+
+def soft_bellman_update_V(R, gamma, T, V):
+    return torch.log(torch.sum(torch.exp(torch.matmul(T, R+gamma*V)), axis=1))
+
+
+def soft_bellman_FP_V(R, gamma, T, V):
+    return soft_bellman_update_V(R, gamma, T, V) - V
+
+
+def soft_V_iteration_torch(R, gamma, T, V_init=None, tol=1e-6):
+    if V_init is None:
+        V_init = torch.zeros(49)
+
+    V = V_init
+    
+    while True:
+        V_new = soft_bellman_update_V(R, gamma,T, V)
+        if torch.max(torch.abs(V - V_new)) < tol:
+            break
+        V = V_new
+    return V
+
+
+def differentiate_V(R: torch.tensor, gamma: torch.tensor, T: torch.tensor, V: torch.tensor):
+
+    '''
+    Calculate the derivative of the value function V with respect to the reward function R and the transition matrix T via implicit differentiation.
+
+    Args:
+    - R (torch.tensor): The reward function R of shape (n_states,)
+    - gamma (torch.tensor): The discount factor gamma
+    - T (torch.tensor): The transition matrix T of shape (n_states, n_actions, n_states)
+    - V (torch.tensor): Initialization of the value function V of shape (n_states,), optional.
+
+    Returns:
+    - V_star (torch.tensor): The optimal value function V, shape (n_states,)
+    - R_grad_out (torch.tensor): The gradient of the value function V with respect to the reward function R, shape (n_states,) evaluated at V_star
+    - T_grad_out (torch.tensor): The gradient of the value function V with respect to the transition matrix T, shape (n_states, n_actions, n_states) evaluated at V_star
+
+    Notes:
+    - We replaced the hard max in the Bellman operator with a soft max to make the operator differentiable. Thereby, we no longer converge to the "true" value function
+    but rather to an approximation.
+    '''
+
+    #Perform value iteration to find a fixed point of the Bellman operator.
+    V_star = soft_V_iteration_torch(R, gamma, T, V_init=V, tol=1e-6)
+
+    #Calculate the gradient of the value function using the implicit function theorem.
+    # A closed form expression for V is given by psi.
+    R_grad = torch.autograd.Variable(R, requires_grad=True)
+    T_grad = torch.autograd.Variable(T, requires_grad=True)
+    V_star_grad = torch.autograd.Variable(V_star, requires_grad=True)
+
+    df_dtheta = soft_bellman_FP_V(R = R_grad, gamma=gamma, T=T_grad, V = V_star_grad)
+    df_dtheta.backward(torch.ones_like(df_dtheta))
+
+    Jacobian = torch.autograd.functional.jacobian(func=soft_bellman_FP_V, inputs=(R_grad, gamma, T_grad, V_star_grad))
+    df_dw = Jacobian[3]
+    del Jacobian
+
+    #Inverse of Jacobian.
+    df_dw_inv = torch.inverse(df_dw)
+
+    R_grad_out = - torch.einsum('ij,j->i', df_dw_inv, R_grad.grad)
+    T_grad_out = - torch.einsum('ij,jkl->ikl', df_dw_inv, T_grad.grad)
+
+    return V_star, R_grad_out, T_grad_out

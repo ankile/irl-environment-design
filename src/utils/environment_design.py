@@ -13,8 +13,8 @@ from .inference.likelihood import compute_log_likelihood
 from src.utils.inference.sampling import bayesian_parameter_learning
 from .make_environment import Environment
 from .constants import ParamTuple
-from .constants import beta_agent
-
+from .inference.posterior import PosteriorInference
+from src.utils.make_candidate_environments import EntropyBM
 
 class EnvironmentDesign():
 
@@ -24,13 +24,21 @@ class EnvironmentDesign():
 
     def __init__(self,
                  base_environment: Environment,
-                 user_params: ParamTuple):
+                 user_params: ParamTuple,
+                 learn_what: list):
+        
+        '''
+        
+        Args:
+        - learn_what: list: which parameters we learn, e.g. learn_what = ['R', 'gamma'] means we learn R and gamma while the transition function is assumed to be known.
+        '''
         
         self.base_environment = base_environment
         self.user_params = user_params
         self.all_observations = []
+        self.learn_what = learn_what
 
-        self.candidate_env_generation_methods = ["random_walls"]
+        self.candidate_env_generation_methods = ["random_walls", "hard_coded_envs"]
 
     
     def run_n_episodes(self,
@@ -61,34 +69,63 @@ class EnvironmentDesign():
         for episode in range(1,self.episodes):
         
             print(f"Started episode {episode}.")
-            #Generate Candidate Environments.
-            candidate_environments = self._generate_candidate_environments(num_candidate_environments=candidate_environments_args["n_environments"],
-                                                  generate_how=candidate_environments_args["generate_how"],
-                                                  candidate_env_specs=candidate_environments_args)
-            
-            #Generate Samples from current belief.
-            samples = self._sample_posterior(observations=self.all_observations,
-                                             sample_size=250,
-                                             burnin=150)
 
-            #Find maximum Bayesian Regret environment.
-            candidate_environments_sorted = self._environment_search(base_environment=self.base_environment,
-                                     posterior_samples=samples,
-                                     n_traj_per_sample=1,
-                                     candidate_envs=candidate_environments,
-                                     how=bayesian_regret_how
-                                     )
-            
-            del samples
-            del candidate_environments
-            
-            #Maximum Regret environment
-            max_regret_environment = candidate_environments_sorted[0]
+            if candidate_environments_args["generate_how"] == "entropy_BM":
 
-            del candidate_environments_sorted
+                #TODO min/ max values need to be inferred from ROI.
+                pos_inference = PosteriorInference(self.all_observations,
+                                                   min_gamma = 0.7,
+                                                   max_gamma = 0.99,
+                                                   min_p = 0.7,
+                                                   max_p = 0.7)
+                
+                current_belief = pos_inference.calculate_posterior(episode=episode)
+                mean_params = pos_inference.mean(posterior_dist = current_belief)
+
+                if "R" not in self.learn_what:
+                    mean_params.R = self.user_params.R
+                if "gamma" not in self.learn_what:
+                    mean_params.gamma = self.user_params.gamma
+                if "T" not in self.learn_what:
+                    mean_params.T = self.user_params.T
+
+                entropy_bm = EntropyBM(estimate_R = mean_params.R)
+
+
+
+
+
+
+            elif candidate_environments_args["generate_how"] in ["random_walls", "hard_coded_envs"]:
+
+                #Generate Candidate Environments.
+                candidate_environments = self._generate_candidate_environments(num_candidate_environments=candidate_environments_args["n_environments"],
+                                                    generate_how=candidate_environments_args["generate_how"],
+                                                    candidate_env_specs=candidate_environments_args)
+                
+                #Generate Samples from current belief.
+                samples = self._sample_posterior(observations=self.all_observations,
+                                                sample_size=250,
+                                                burnin=150)
+
+                #Find maximum Bayesian Regret environment.
+                candidate_environments_sorted = self._environment_search(base_environment=self.base_environment,
+                                        posterior_samples=samples,
+                                        n_traj_per_sample=1,
+                                        candidate_envs=candidate_environments,
+                                        how=bayesian_regret_how
+                                        )
+                
+                del samples
+                del candidate_environments
+                
+                #Maximum Regret environment
+                optimal_environment = candidate_environments_sorted[0]
+
+                del candidate_environments_sorted
             
             #Observe human in environment. Append observation to all observations.
-            observation = self._observe_human(environment=max_regret_environment,n_trajectories=2)
+            observation = self._observe_human(environment=optimal_environment,n_trajectories=2)
             self.all_observations.append(observation)
 
             del observation
