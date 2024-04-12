@@ -44,20 +44,47 @@ def make_world(
 class EntropyBM():
 
     '''
-    
+    Maximize the Entropy of the Behavior Map via Implicit Differentiation.
+
+    Args:
+    - parameter_estimates (namedtuple): The parameter estimates of the MDP. Contains estimates for R, \gamma, T.
+    - gammas (list): The parameter bounds for the discount factor.
+    - probs (list): The parameter bounds for the probability of the agent choosing the optimal action.
+    - region_of_interest (list): The region of interest in the Behavior Map.
     '''
 
-    def __init__(self, parameter_estimates, gammas, probs) -> None:
+    def __init__(self, parameter_estimates, gammas, probs, region_of_interest) -> None:
 
         self.estimate_R = parameter_estimates.R
         self.estimate_gamma = parameter_estimates.gamma
-        self.estimate_T = parameter_estimates.T
+        self.estimate_T = parameter_estimates.p
 
         self.gammas = gammas
         self.probs = probs
+        self.region_of_interest = region_of_interest
 
 
-    def compute_covers(self, bm_out):
+    #TODO make this pretty, currently only works for 2-dim Behavior Map.
+    def compute_bm_ROI(self, behavior_map):
+
+        '''
+        Compute Behavior Map restricted to Region of Interest.
+
+        Args:
+        - behavior_map: The Behavior Map. Output of plot_bmap function.
+
+        Returns:
+        - behavior_ROI (list): The Behavior Map restricted to the Region of Interest.
+        '''
+
+        self.behavior_ROI = []
+        for i in range(behavior_map.data.shape[0]):
+            for j in range(behavior_map.data.shape[1]):
+                if [i,j] in self.region_of_interest:
+                    self.behavior_ROI.append(behavior_map.data[i,j])
+
+
+    def compute_covers(self, behavior_map):
 
         '''
         Computes the entropy of the Behavior Map and for each behavior in the behavior map the proportion of the BM that is covered by the respective Behavior.
@@ -70,12 +97,15 @@ class EntropyBM():
         - max_ent_cover (float): The proportion of the BM that would be covered by each behavior in the case of maximum entropy.
         '''
 
-        _behaviors = np.unique(bm_out.data)
-        n_behavior_samples = bm_out.data.size
+        #Compute Behavior Map restricted to Region of Interest.
+        self.compute_bm_ROI(behavior_map)
+
+        _behaviors = np.unique(self.behavior_ROI)
+        n_behavior_samples = len(self.behavior_ROI)
         covers = {}
 
         for b in _behaviors:
-            covers[b] = np.sum(bm_out.data == b) / n_behavior_samples
+            covers[b] = np.sum(self.behavior_ROI == b) / n_behavior_samples
 
         max_ent_cover = 1/len(_behaviors)
 

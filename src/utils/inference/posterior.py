@@ -65,6 +65,28 @@ class PosteriorInference():
         assert (type(num_episodes) == int) or (num_episodes is None)
         assert (type(episode) == int) or (episode is None)
 
+        def _compute_likelihood_for_episode(episode):
+                #Arrays to loop over and store results.
+                log_likelihoods: np.ndarray = np.zeros(shape = (self.resolution, self.resolution))
+
+
+                #Observations up to current episode.
+                expert_trajectories = self.expert_trajectories[:episode]
+
+
+                #Calculate log-likelihood for each (p, gamma) sample.
+                for idx_p, p in enumerate(self.ps):
+                    for idx_gamma, gamma in enumerate(self.gammas):
+
+                        proposed_parameter = ParamTuple(p=p, gamma=gamma, R=None)
+
+                        likelihood = expert_trajectory_log_likelihood(
+                            proposed_parameter, expert_trajectories
+                        )
+                        log_likelihoods[idx_p, idx_gamma] = likelihood
+
+                return log_likelihoods
+
         self.posterior_distribution: dict = {}
 
         if episode is not None:
@@ -89,27 +111,7 @@ class PosteriorInference():
                 self.posterior_distribution[f"episode={episode}"] = log_likelihoods
 
 
-        def _compute_likelihood_for_episode(episode):
-                #Arrays to loop over and store results.
-                log_likelihoods: np.ndarray = np.zeros(shape = (self.resolution, self.resolution))
 
-
-                #Observations up to current episode.
-                expert_trajectories = self.expert_trajectories[:episode]
-
-
-                #Calculate log-likelihood for each (p, gamma) sample.
-                for idx_p, p in enumerate(self.ps):
-                    for idx_gamma, gamma in enumerate(self.gammas):
-
-                        proposed_parameter = ParamTuple(p=p, gamma=gamma, R=None)
-
-                        likelihood = expert_trajectory_log_likelihood(
-                            proposed_parameter, expert_trajectories
-                        )
-                        log_likelihoods[idx_p, idx_gamma] = likelihood
-
-                return log_likelihoods
 
 
     def plot_posterior(self,
@@ -245,7 +247,8 @@ class PosteriorInference():
              episode:int = None,
              posterior_dist: np.array = None):
 
-        
+        assert (episode is not None) or (posterior_dist is not None), f"Supply either episode to calculate mean for or supply posterior distribution." 
+
         if episode is not None:
             self._validate_episode(episode=episode)
 
@@ -311,3 +314,30 @@ class PosteriorInference():
             prob_gamma_true = np.sum(posterior_distribution[:,index_gamma_true])/total_probability
             
             return (prob_p_true, prob_gamma_true)
+        
+    
+    def region_of_interest(likelihood, 
+                           confidence_interval: float = 0.8
+                           ):
+
+        assert (confidence_interval >= 0) and (confidence_interval <= 1), f"Confidence interval must be in [0,1], you gave value {confidence_interval}."
+
+        region_of_interest = []
+        idx = 1
+        current_mass = 0
+
+        flat_likelihood = likelihood.flatten()
+        flat_likelihood_sorted = np.sort(flat_likelihood)
+
+        #Add mass of n-th largest element until we reach the ROI confidence interval.
+        while True:
+
+            if current_mass > confidence_interval:
+                break
+
+            current_mass += flat_likelihood_sorted[-idx]
+            region_of_interest.append(np.where(likelihood == flat_likelihood_sorted[idx]))
+            idx += 1
+
+        #Change to Numpy Array for easier indexing
+        region_of_interest = np.array(region_of_interest).reshape(idx-1,2)
