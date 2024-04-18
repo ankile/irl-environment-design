@@ -83,7 +83,7 @@ class EntropyBM():
                 if (i*j) in self.region_of_interest:
                     self.behavior_ROI.append(behavior_map.data[i,j])
 
-        print("self.behavior_ROI", self.behavior_ROI)
+        # print("self.behavior_ROI", self.behavior_ROI)
 
 
     def compute_covers(self, behavior_map):
@@ -181,7 +181,7 @@ class EntropyBM():
 
         for i in range(n_compute_BM):
 
-            print(f"Computing BM {i} of {n_compute_BM}")
+            # print(f"Computing BM {i} of {n_compute_BM}")
 
             # Compute Behavior Map
             bm_out = bm.plot_bmap(world=_world, gammas=self.gammas, probs=self.probs)
@@ -193,7 +193,7 @@ class EntropyBM():
             #Check if the current Behavior Map has higher entropy.
             if entropy_BM > _max_ent:
                 max_ent_possible = stats.entropy(np.repeat(max_ent_prob, repeats=int(1/max_ent_prob)))
-                print(f"New Maximum Entropy Reward Function! Entropy: {entropy_BM}. Maximum Entropy possible: {max_ent_possible}.")
+                # print(f"New Maximum Entropy Reward Function! Entropy: {entropy_BM}. Maximum Entropy possible: {max_ent_possible}.")
                 _max_ent = entropy_BM
                 max_ent_R = R
 

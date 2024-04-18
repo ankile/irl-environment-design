@@ -46,8 +46,8 @@ class EnvironmentDesign():
     
     def run_n_episodes(self,
                        n_episodes: int,
-                       bayesian_regret_how,
-                       candidate_environments_args: dict):
+                       candidate_environments_args: dict,
+                       bayesian_regret_how = None,):
         
         '''
         Run Environment Design for n_episodes episodes.
@@ -68,6 +68,7 @@ class EnvironmentDesign():
         observation = self._observe_human(environment=self.base_environment, n_trajectories=2)
         self.all_observations.append(observation)
         print("Finished episode 0.")
+        region_of_interest = None
 
         for episode in range(1,self.episodes):
         
@@ -82,16 +83,22 @@ class EnvironmentDesign():
                 min_p = 0.7
                 max_p = 0.99
                 pos_inference = PosteriorInference(self.all_observations,
+                                                   resolution=10,
                                                    min_gamma = min_gamma,
                                                    max_gamma = max_gamma,
                                                    min_p = min_p,
-                                                   max_p = max_p)
+                                                   max_p = max_p,
+                                                   region_of_interest=region_of_interest)
                 
+                print("Started computing Posterior.")
                 current_belief = pos_inference.calculate_posterior(episode=episode)
+                print("current_belief:", current_belief)
+                print("Finished computing Posterior.")
                 map_params = pos_inference.mean(posterior_dist = current_belief) #TODO change this to MAP.
-                region_of_interest = pos_inference.region_of_interest(log_likelihood = current_belief, confidence_interval=0.8)
+                region_of_interest = pos_inference.calculate_region_of_interest(log_likelihood = current_belief, confidence_interval=0.8)
+                print("Region of Interest:", region_of_interest)
 
-                print(f"Computed Region of Interest. Size = {region_of_interest.size/current_belief.size.sum()}")
+                print(f"Computed Region of Interest. Size = {round(region_of_interest.size/current_belief.size, 2)}")
 
 
                 #TODO here we need to have a cleaner way to convert the parametrization into the actual function.
@@ -101,7 +108,9 @@ class EnvironmentDesign():
                     R_estimate = self.user_params.R
 
 
-                if "gamma" not in self.learn_what:
+                if "gamma" in self.learn_what:
+                    gamma_estimate = map_params.gamma
+                else:
                     gamma_estimate = self.user_params.gamma
 
 
@@ -126,12 +135,12 @@ class EnvironmentDesign():
                 _world = Experiment_2D(self.base_environment.N,
                                        self.base_environment.M,
                                        rewards=R_estimate,
-                                       goal_states=self.base_environment.goal_states,
+                                       absorbing_states=self.base_environment.goal_states,
                                        wall_states=self.base_environment.wall_states)
 
-                #Find a reward function that maximizes the entropy of the Behavior Map. TODO: also use transition function.
+                #Find a reward function that maximizes the entropy of the Behavior Map. TODO: also use transition function. Currently only do gradient updates on R.
                 updated_reward = entropy_bm.BM_search(world = _world,
-                                                      n_compute_BM = 10,
+                                                      n_compute_BM = 5,
                                                       n_iterations_gradient=20,
                                                       stepsize_gradient=0.001)
                 
@@ -175,7 +184,7 @@ class EnvironmentDesign():
                 del candidate_environments_sorted
             
             #Observe human in environment. Append observation to all observations.
-            observation = self._observe_human(environment=optimal_environment,n_trajectories=2)
+            observation = self._observe_human(environment=optimal_environment,n_trajectories=1)
             self.all_observations.append(observation)
 
             del observation
