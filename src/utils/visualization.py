@@ -47,7 +47,8 @@ from matplotlib.patches import Rectangle
 
 def plot_environment(reward_function, wall_states, start_state=(0, 0), ax=None,
                      annotate=True,
-                     colorbar=False):
+                     colorbar=False,
+                     title:str = "Environment"):
     # Assume the reward function is already reshaped to a 2D grid
     N, M = reward_function.shape
     # Identify wall states is the indixes into the
@@ -68,10 +69,10 @@ def plot_environment(reward_function, wall_states, start_state=(0, 0), ax=None,
         elif (i, j) in wall_states:
             # Add a dark gray rectangle to represent the wall
             ax.add_patch(Rectangle((j - 0.5, i - 0.5), 1, 1, color="darkgray"))
-        elif val != 0 and annotate:
-            ax.text(j, i, f"{round(val, 1):g}", va="center", ha="center", color="white")
+        # elif val != 0 and annotate:
+        ax.text(j, i, f"{round(val, 1):g}", va="center", ha="center", color="white")
     ax.text(0,0, "S", va="center", ha="center", color="white")
-    ax.set_title(f"Environment")
+    ax.set_title(f"{title}")
 
 
 

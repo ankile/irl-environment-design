@@ -22,15 +22,21 @@ class PosteriorInference():
 
     def __init__(self, 
                  expert_trajectories: List[tuple[Environment, List[StateTransition]]],
-                 resolution: int=15) -> None:
+                 resolution: int=15,
+                 min_gamma: float = 0.05,
+                 max_gamma: float = 0.95,
+                 min_p: float = 0.05,
+                 max_p: float = 0.95,
+                 region_of_interest = None) -> None:
         
 
         self.expert_trajectories = expert_trajectories
         self.resolution = resolution
-        self.min_gamma = 0.05
-        self.max_gamma = 0.95
-        self.min_p = 0.05
-        self.max_p = 0.95
+        self.min_gamma = min_gamma
+        self.max_gamma = max_gamma
+        self.min_p = min_p
+        self.max_p = max_p
+        self.region_of_interest = region_of_interest
 
         self.gammas = np.linspace(self.min_gamma, self.max_gamma, self.resolution)
         self.ps = np.linspace(self.min_p, self.max_p, self.resolution)
@@ -45,55 +51,76 @@ class PosteriorInference():
 
 
     def calculate_posterior(self, 
-                            num_episodes: int):
+                            num_episodes = None,
+                            episode = None):
         
         '''
-        Calculate the posterior distribution for episodes 1,..,num_episodes.
+        Calculate the posterior distribution for episodes 1,..,num_episodes or only for episode *episode*.
 
         Args:
         - episode: int, number of episodes for which the posterior should be evaluated.
         '''
 
         num_episodes_recorded = len(self.expert_trajectories)
-        assert num_episodes <= num_episodes_recorded, f"episode is larger than number of available episodes. episode = {num_episodes}, number of played episodes = {num_episodes_recorded}"
+        if num_episodes:
+            assert num_episodes <= num_episodes_recorded, f"episode is larger than number of available episodes. episode = {num_episodes}, number of played episodes = {num_episodes_recorded}"
         del num_episodes_recorded
+        assert (type(num_episodes) == int) or (num_episodes is None)
+        assert (type(episode) == int) or (episode is None)
+
+        def _compute_likelihood_for_episode(episode):
+                #Arrays to loop over and store results.
+                log_likelihoods: np.ndarray = np.zeros(shape = (self.resolution, self.resolution))
+
+
+                #Observations up to current episode.
+                expert_trajectories = self.expert_trajectories[:episode]
+
+
+                #Calculate log-likelihood for each (p, gamma) sample.
+                for idx_p, p in enumerate(self.ps):
+                    for idx_gamma, gamma in enumerate(self.gammas):
+
+                        #If a ROI is given, only compute likelihoods for Region of Interest to save compute.
+                        if self.region_of_interest is not None:
+                            if ((idx_p*self.resolution)+(idx_gamma)) not in self.region_of_interest:
+                                log_likelihoods[idx_p, idx_gamma] = -np.inf
+                                continue
+
+                        proposed_parameter = ParamTuple(p=p, gamma=gamma, R=None)
+
+                        likelihood = expert_trajectory_log_likelihood(
+                            proposed_parameter, expert_trajectories
+                        )
+                        log_likelihoods[idx_p, idx_gamma] = likelihood
+
+                return log_likelihoods
 
         self.posterior_distribution: dict = {}
 
+        if episode is not None:
+
+            return _compute_likelihood_for_episode(episode)
         
-        for episode in range(num_episodes+1):
+        if num_episodes is not None:
+            for episode in range(num_episodes+1):
 
-            '''
-            Calculate Posterior Distribution for observations.
-            '''
+                '''
+                Calculate Posterior Distribution for observations.
+                '''
 
-            if episode == 0:
-                print(f"Calculate distribution of episode {episode}, e.g. the prior distribution.")
-            else:
-                print(f"Calculate distribution of episode {episode}.")
+                if episode == 0:
+                    print(f"Calculate distribution of episode {episode}, e.g. the prior distribution.")
+                else:
+                    print(f"Calculate distribution of episode {episode}.")
 
-
-            #Arrays to loop over and store results.
-            log_likelihoods: np.ndarray = np.zeros(shape = (self.resolution, self.resolution))
-
-
-            #Observations up to current episode.
-            expert_trajectories = self.expert_trajectories[:episode]
+                
+                log_likelihoods = _compute_likelihood_for_episode(episode)
+                #Save log likelihoods.
+                self.posterior_distribution[f"episode={episode}"] = log_likelihoods
 
 
-            #Calculate log-likelihood for each (p, gamma) sample.
-            for idx_p, p in enumerate(self.ps):
-                for idx_gamma, gamma in enumerate(self.gammas):
 
-                    proposed_parameter = ParamTuple(p=p, gamma=gamma, R=None)
-
-                    likelihood = expert_trajectory_log_likelihood(
-                        proposed_parameter, expert_trajectories
-                    )
-                    log_likelihoods[idx_p, idx_gamma] = likelihood
-
-            #Save log likelihoods.
-            self.posterior_distribution[f"episode={episode}"] = log_likelihoods
 
 
     def plot_posterior(self,
@@ -196,7 +223,7 @@ class PosteriorInference():
         prob_true_gamma_per_episode = [prob_true_per_episode[i][1] for i in range(episode+1)]
 
 
-        #Plot statistics.
+        #Plot statistis.
         # Create figure and plot the statistics.
         fix, axs = plt.subplots(1, 2, figsize=(14, 3))
         axs[0].hlines(true_params.p, 0, episode, colors="red", linestyle='dashed', label=f"True $p = {round(true_params.p,2)}$")
@@ -226,12 +253,19 @@ class PosteriorInference():
 
 
     def mean(self,
-             episode:int):
+             episode:int = None,
+             posterior_dist: np.array = None):
 
-        self._validate_episode(episode=episode)
+        assert (episode is not None) or (posterior_dist is not None), f"Supply either episode to calculate mean for or supply posterior distribution." 
 
-        #Arrays to take mean over.
-        posterior_probabilities = np.exp(self.posterior_distribution[f"episode={episode}"])
+        if episode is not None:
+            self._validate_episode(episode=episode)
+
+            #Arrays to take mean over.
+            posterior_probabilities = np.exp(self.posterior_distribution[f"episode={episode}"])
+
+        elif posterior_dist is not None:
+            posterior_probabilities = np.exp(posterior_dist)
 
         total_probability = np.sum(posterior_probabilities, axis=(0,1))
         
@@ -289,3 +323,33 @@ class PosteriorInference():
             prob_gamma_true = np.sum(posterior_distribution[:,index_gamma_true])/total_probability
             
             return (prob_p_true, prob_gamma_true)
+        
+    
+    def calculate_region_of_interest(self,
+                           log_likelihood, 
+                           confidence_interval: float = 0.8
+                           ):
+
+        assert (confidence_interval >= 0) and (confidence_interval <= 1), f"Confidence interval must be in [0,1], you gave value {confidence_interval}."
+
+        #Convert array from log-likelihood to likelihood and normalize to 1.
+        flat_log_likelihood = log_likelihood.flatten()
+        flat_likelihood = np.exp(flat_log_likelihood)
+        flat_likelihood = flat_likelihood/np.sum(flat_likelihood)
+
+        n = 0
+        current_mass = 0
+
+
+        sorted_indexes = np.argsort(flat_likelihood)[::-1]
+
+        for i in range(len(sorted_indexes)):
+            current_mass += flat_likelihood[sorted_indexes[i]]
+            if current_mass > confidence_interval:
+                n = i + 1
+                break
+
+        #Change to Numpy Array for easier indexing
+        region_of_interest = sorted_indexes[:n]
+
+        return region_of_interest
