@@ -80,8 +80,10 @@ class EntropyBM():
         self.behavior_ROI = []
         for i in range(behavior_map.data.shape[0]):
             for j in range(behavior_map.data.shape[1]):
-                if [i,j] in self.region_of_interest:
+                if (i*j) in self.region_of_interest:
                     self.behavior_ROI.append(behavior_map.data[i,j])
+
+        print("self.behavior_ROI", self.behavior_ROI)
 
 
     def compute_covers(self, behavior_map):
@@ -173,9 +175,9 @@ class EntropyBM():
         '''
 
         _world = deepcopy(world)
-        R = _world.rewards
+        R = self.estimate_R
         _max_ent = -np.inf
-        max_ent_R = _world.rewards
+        max_ent_R = self.estimate_R
 
         for i in range(n_compute_BM):
 

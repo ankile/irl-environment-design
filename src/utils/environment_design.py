@@ -5,6 +5,7 @@ from tqdm import tqdm
 import numpy as np
 import pickle
 import datetime
+from copy import deepcopy
 
 from .make_environment import transition_matrix, insert_walls_into_T
 from .optimization import soft_q_iteration, grad_policy_maximization, value_iteration_with_policy
@@ -15,6 +16,8 @@ from .make_environment import Environment
 from .constants import ParamTuple
 from .inference.posterior import PosteriorInference
 from src.utils.make_candidate_environments import EntropyBM
+from src.worlds.mdp2d import Experiment_2D
+
 
 class EnvironmentDesign():
 
@@ -73,7 +76,7 @@ class EnvironmentDesign():
             if candidate_environments_args["generate_how"] == "entropy_BM":
 
 
-                #TODO min/ max values need to be inferred from ROI.
+                #TODO min/ max values need to be inferred from ROI. Are inferred but make this cleaner, e.g. "zoom in" on BM.
                 min_gamma = 0.7
                 max_gamma = 0.99
                 min_p = 0.7
@@ -85,23 +88,60 @@ class EnvironmentDesign():
                                                    max_p = max_p)
                 
                 current_belief = pos_inference.calculate_posterior(episode=episode)
-                mean_params = pos_inference.mean(posterior_dist = current_belief)
+                map_params = pos_inference.mean(posterior_dist = current_belief) #TODO change this to MAP.
+                region_of_interest = pos_inference.region_of_interest(log_likelihood = current_belief, confidence_interval=0.8)
 
-                if "R" not in self.learn_what:
-                    mean_params.R = self.user_params.R
+                print(f"Computed Region of Interest. Size = {region_of_interest.size/current_belief.size.sum()}")
+
+
+                #TODO here we need to have a cleaner way to convert the parametrization into the actual function.
+                if "R" in self.learn_what:
+                    R_estimate = map_params.R
+                else:
+                    R_estimate = self.user_params.R
+
+
                 if "gamma" not in self.learn_what:
-                    mean_params.gamma = self.user_params.gamma
-                if "T" not in self.learn_what:
-                    mean_params.T = self.user_params.T
+                    gamma_estimate = self.user_params.gamma
 
 
-                entropy_bm = EntropyBM(parameter_estimates=mean_params,
+                if "T" in self.learn_what:
+                    T_estimate = transition_matrix(self.base_environment.N, self.base_environment.M, p=map_params.p, absorbing_states=self.base_environment.goal_states)
+                    T_estimate = insert_walls_into_T(T=T_estimate, wall_indices=self.base_environment.wall_states)
+                else:
+                    T_estimate = self.base_environment.T_true
+
+
+                param_estimates = ParamTuple(p = T_estimate, gamma=gamma_estimate, R = R_estimate)
+
+
+                #Initialize EntropyBM object.
+                entropy_bm = EntropyBM(parameter_estimates=param_estimates,
                                        gammas = np.linspace(min_gamma, max_gamma, num=15),
-                                       probs= np.linspace(min_p, max_p, num=15))
+                                       probs= np.linspace(min_p, max_p, num=15),
+                                       region_of_interest=region_of_interest,
+                                       )
+                
+                #World to compute Behavior Map. TODO: this should take arbitrary arguments and not only gamma/p.
+                _world = Experiment_2D(self.base_environment.N,
+                                       self.base_environment.M,
+                                       rewards=R_estimate,
+                                       goal_states=self.base_environment.goal_states,
+                                       wall_states=self.base_environment.wall_states)
+
+                #Find a reward function that maximizes the entropy of the Behavior Map. TODO: also use transition function.
+                updated_reward = entropy_bm.BM_search(world = _world,
+                                                      n_compute_BM = 10,
+                                                      n_iterations_gradient=20,
+                                                      stepsize_gradient=0.001)
+                
+                print("Learned Reward Function that maximizes Entropy. Reward function: ", updated_reward)
+                
+                #Generate an environment in which we observe the human with maximal information gain.
+                optimal_environment = deepcopy(self.base_environment)
+                optimal_environment.R_true = updated_reward
                 
                 
-
-
 
 
 

@@ -60,7 +60,8 @@ class PosteriorInference():
         '''
 
         num_episodes_recorded = len(self.expert_trajectories)
-        assert num_episodes <= num_episodes_recorded, f"episode is larger than number of available episodes. episode = {num_episodes}, number of played episodes = {num_episodes_recorded}"
+        if num_episodes:
+            assert num_episodes <= num_episodes_recorded, f"episode is larger than number of available episodes. episode = {num_episodes}, number of played episodes = {num_episodes_recorded}"
         del num_episodes_recorded
         assert (type(num_episodes) == int) or (num_episodes is None)
         assert (type(episode) == int) or (episode is None)
@@ -316,7 +317,8 @@ class PosteriorInference():
             return (prob_p_true, prob_gamma_true)
         
     
-    def region_of_interest(likelihood, 
+    def region_of_interest(self,
+                           log_likelihood = None, 
                            confidence_interval: float = 0.8
                            ):
 
@@ -326,7 +328,9 @@ class PosteriorInference():
         idx = 1
         current_mass = 0
 
-        flat_likelihood = likelihood.flatten()
+        flat_log_likelihood = log_likelihood.flatten()
+        flat_likelihood = np.exp(flat_log_likelihood)
+        flat_likelihood = flat_likelihood/np.sum(flat_likelihood)
         flat_likelihood_sorted = np.sort(flat_likelihood)
 
         #Add mass of n-th largest element until we reach the ROI confidence interval.
@@ -334,10 +338,13 @@ class PosteriorInference():
 
             if current_mass > confidence_interval:
                 break
-
+            
             current_mass += flat_likelihood_sorted[-idx]
-            region_of_interest.append(np.where(likelihood == flat_likelihood_sorted[idx]))
+            region_of_interest.append(np.where(flat_likelihood == flat_likelihood_sorted[idx]))
             idx += 1
 
         #Change to Numpy Array for easier indexing
-        region_of_interest = np.array(region_of_interest).reshape(idx-1,2)
+        region_of_interest = np.array(region_of_interest)
+        # region_of_interest = np.array(region_of_interest).reshape(idx-1,2)
+
+        return region_of_interest
