@@ -2,13 +2,19 @@ from copy import deepcopy
 
 import matplotlib.pyplot as plt
 import numpy as np
+<<<<<<< HEAD
 import torch
 from scipy import stats
+=======
+>>>>>>> main
 
 import src.utils.behavior_map as bm
 from src.worlds.mdp2d import Experiment_2D
 from src.utils.make_environment import insert_walls_into_T
+<<<<<<< HEAD
 from src.utils.optimization import differentiate_V
+=======
+>>>>>>> main
 
 
 
@@ -16,8 +22,11 @@ from src.utils.optimization import differentiate_V
 Functions to generate candidate environments.
 '''
 
+<<<<<<< HEAD
 
 
+=======
+>>>>>>> main
 def make_world(
     height: int,
     width: int,
@@ -41,6 +50,7 @@ def make_world(
     return experiment
 
 
+<<<<<<< HEAD
 class EntropyBM():
 
     '''
@@ -207,6 +217,8 @@ class EntropyBM():
         
 
 
+=======
+>>>>>>> main
 class AgnosticsBM():
 
     '''
