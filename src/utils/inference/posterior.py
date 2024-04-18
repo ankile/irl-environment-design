@@ -265,6 +265,7 @@ class PosteriorInference():
             posterior_probabilities = np.exp(self.posterior_distribution[f"episode={episode}"])
 
         elif posterior_dist is not None:
+
             posterior_probabilities = np.exp(posterior_dist)
 
         total_probability = np.sum(posterior_probabilities, axis=(0,1))

@@ -65,7 +65,7 @@ class EnvironmentDesign():
 
         #Observe human in base environment. Append observation to all observations.
         print("Started episode 0.")
-        observation = self._observe_human(environment=self.base_environment, n_trajectories=2)
+        observation = self._observe_human(environment=self.base_environment, n_trajectories=1)
         self.all_observations.append(observation)
         print("Finished episode 0.")
         region_of_interest = None
@@ -78,9 +78,9 @@ class EnvironmentDesign():
 
 
                 #TODO min/ max values need to be inferred from ROI. Are inferred but make this cleaner, e.g. "zoom in" on BM.
-                min_gamma = 0.7
+                min_gamma = 0.5
                 max_gamma = 0.99
-                min_p = 0.7
+                min_p = 0.5
                 max_p = 0.99
                 pos_inference = PosteriorInference(self.all_observations,
                                                    resolution=10,
@@ -90,32 +90,33 @@ class EnvironmentDesign():
                                                    max_p = max_p,
                                                    region_of_interest=region_of_interest)
                 
-                print("Started computing Posterior.")
+                # print("Started computing Posterior.")
                 current_belief = pos_inference.calculate_posterior(episode=episode)
-                print("current_belief:", current_belief)
-                print("Finished computing Posterior.")
-                map_params = pos_inference.mean(posterior_dist = current_belief) #TODO change this to MAP.
+                # print("current_belief:", current_belief)
+                # print("Finished computing Posterior.")
+                mean_params = pos_inference.mean(posterior_dist = current_belief) #TODO change this to MAP.
+                print("Mean Parameters:", mean_params)  
                 region_of_interest = pos_inference.calculate_region_of_interest(log_likelihood = current_belief, confidence_interval=0.8)
-                print("Region of Interest:", region_of_interest)
+                # print("Region of Interest:", region_of_interest)
 
-                print(f"Computed Region of Interest. Size = {round(region_of_interest.size/current_belief.size, 2)}")
+                # print(f"Computed Region of Interest. Size = {round(region_of_interest.size/current_belief.size, 2)}")
 
 
                 #TODO here we need to have a cleaner way to convert the parametrization into the actual function.
                 if "R" in self.learn_what:
-                    R_estimate = map_params.R
+                    R_estimate = mean_params.R
                 else:
                     R_estimate = self.user_params.R
 
 
                 if "gamma" in self.learn_what:
-                    gamma_estimate = map_params.gamma
+                    gamma_estimate = mean_params.gamma
                 else:
                     gamma_estimate = self.user_params.gamma
 
 
                 if "T" in self.learn_what:
-                    T_estimate = transition_matrix(self.base_environment.N, self.base_environment.M, p=map_params.p, absorbing_states=self.base_environment.goal_states)
+                    T_estimate = transition_matrix(self.base_environment.N, self.base_environment.M, p=mean_params.p, absorbing_states=self.base_environment.goal_states)
                     T_estimate = insert_walls_into_T(T=T_estimate, wall_indices=self.base_environment.wall_states)
                 else:
                     T_estimate = self.base_environment.T_true
@@ -284,7 +285,7 @@ class EnvironmentDesign():
         
         elif generate_how == "Naive_BM":
             
-        
+            raise NotImplementedError("Naive BM not implemented yet.")
 
         else:
         
@@ -294,7 +295,7 @@ class EnvironmentDesign():
 
     def _observe_human(self,
                       environment: Environment,
-                      n_trajectories: int=2):
+                      n_trajectories: int=1):
         
         '''
         Observe human in an environment n_trajectories times.
@@ -310,7 +311,8 @@ class EnvironmentDesign():
         #Calculate policy of agent in environment.
         T_agent = transition_matrix(environment.N, environment.M, p=self.user_params.p, absorbing_states=environment.goal_states)
         T_agent = insert_walls_into_T(T=T_agent, wall_indices=environment.wall_states)
-        agent_policy = soft_q_iteration(self.user_params.R, T_agent, gamma=self.user_params.gamma, beta=1000)
+        #Here we use the (possibly updated) reward function and not the initial ('true') reward function
+        agent_policy = soft_q_iteration(environment.R_true, T_agent, gamma=self.user_params.gamma, beta=1000)
 
         # Generate trajectories.
         trajectories = generate_n_trajectories(
