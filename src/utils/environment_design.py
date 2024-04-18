@@ -211,6 +211,7 @@ class EnvironmentDesign():
         }
 
         filepath = os.path.join(os.getcwd(), "checkpoints", experiment_name, todays_date)
+        print("saved in filepath", filepath)
         filename = current_time
         os.makedirs(filepath, exist_ok=True)
 
