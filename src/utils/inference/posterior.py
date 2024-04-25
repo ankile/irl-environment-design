@@ -2,6 +2,7 @@ from typing import List
 
 import numpy as np
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 from ..make_environment import Environment
 from ..constants import ParamTuple, StateTransition
@@ -78,8 +79,9 @@ class PosteriorInference():
 
 
                 #Calculate log-likelihood for each (p, gamma) sample.
-                for idx_p, p in enumerate(self.ps):
-                    for idx_gamma, gamma in enumerate(self.gammas):
+                
+                for idx_p, p in tqdm(enumerate(self.ps)):
+                    for idx_gamma, gamma in tqdm(enumerate(self.gammas), leave=False):
 
                         #If a ROI is given, only compute likelihoods for Region of Interest to save compute.
                         if self.region_of_interest is not None:
@@ -142,18 +144,22 @@ class PosteriorInference():
 
         #Things to plot.
         posterior_dist = self.posterior_distribution[f"episode={episode}"]
+
+        #Normalize to get probabilities.
+        posterior_dist = np.exp(posterior_dist)
+        posterior_dist = posterior_dist/np.sum(posterior_dist)
         
         #Posterior Distribution.
         im = plt.imshow(
-        posterior_dist, cmap="viridis",origin="lower")
+        posterior_dist, cmap="viridis",origin="upper")
         plt.colorbar(im, orientation="vertical")
 
         #Cosmetics.
         plt.xlabel("$\gamma$")
         plt.ylabel("p")
-        plt.yticks(np.arange(self.resolution), np.round(self.ps, 2))
+        plt.yticks(np.arange(self.resolution), (np.round(self.ps, 2)))
         plt.xticks(np.arange(self.resolution), np.round(self.gammas, 2), rotation='vertical')
-        plt.title(f"Posterior over $p$ and $\gamma$\nlog likelihood after {episode} round(s).")
+        plt.title(f"Posterior over $p$ and $\gamma$\nProb. after {episode} round(s).")
 
 
         #Show true values.

@@ -204,7 +204,7 @@ class EntropyBM():
 
             #Update Reward Function
             _world.rewards = R.detach().numpy()
-        # print(f"Finished BM Search. Entropy: {_max_ent}.")
+        print(f"Finished BM Search. Entropy: {_max_ent}.")
         # print("Behavior Map: ", bm_out)
 
         return max_ent_R

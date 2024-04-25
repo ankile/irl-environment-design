@@ -13,7 +13,7 @@ from .inference.rollouts import generate_n_trajectories
 from .inference.likelihood import compute_log_likelihood
 from src.utils.inference.sampling import bayesian_parameter_learning
 from .make_environment import Environment
-from .constants import ParamTuple
+from .constants import ParamTuple, beta_agent
 from .inference.posterior import PosteriorInference
 from src.utils.make_candidate_environments import EntropyBM
 from src.worlds.mdp2d import Experiment_2D
@@ -68,6 +68,10 @@ class EnvironmentDesign():
         observation = self._observe_human(environment=self.base_environment, n_trajectories=1)
         self.all_observations.append(observation)
         print("Finished episode 0.")
+        self.diagnostics = {}
+        self.diagnostics["parameter_means"] = []
+        self.diagnostics["region_of_interests"] = []
+        
         region_of_interest = None
 
         for episode in range(1,self.episodes):
@@ -90,16 +94,16 @@ class EnvironmentDesign():
                                                    max_p = max_p,
                                                    region_of_interest=region_of_interest)
                 
-                # print("Started computing Posterior.")
+                print("Started computing Posterior.")
                 current_belief = pos_inference.calculate_posterior(episode=episode)
-                # print("current_belief:", current_belief)
-                # print("Finished computing Posterior.")
+                print("current_belief:", current_belief)
+                print("Finished computing Posterior.")
                 mean_params = pos_inference.mean(posterior_dist = current_belief) #TODO change this to MAP.
                 print("Mean Parameters:", mean_params)  
                 region_of_interest = pos_inference.calculate_region_of_interest(log_likelihood = current_belief, confidence_interval=0.8)
-                # print("Region of Interest:", region_of_interest)
+                print("Region of Interest:", region_of_interest)
 
-                # print(f"Computed Region of Interest. Size = {round(region_of_interest.size/current_belief.size, 2)}")
+                print(f"Computed Region of Interest. Size = {round(region_of_interest.size/current_belief.size, 2)}")
 
 
                 #TODO here we need to have a cleaner way to convert the parametrization into the actual function.
@@ -312,7 +316,7 @@ class EnvironmentDesign():
         T_agent = transition_matrix(environment.N, environment.M, p=self.user_params.p, absorbing_states=environment.goal_states)
         T_agent = insert_walls_into_T(T=T_agent, wall_indices=environment.wall_states)
         #Here we use the (possibly updated) reward function and not the initial ('true') reward function
-        agent_policy = soft_q_iteration(environment.R_true, T_agent, gamma=self.user_params.gamma, beta=1000)
+        agent_policy = soft_q_iteration(environment.R_true, T_agent, gamma=self.user_params.gamma, beta=beta_agent)
 
         # Generate trajectories.
         trajectories = generate_n_trajectories(

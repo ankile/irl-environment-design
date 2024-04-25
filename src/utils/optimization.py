@@ -42,6 +42,7 @@ def soft_q_iteration(
     gamma: float,
     beta: float,  # Inverse temperature parameter for the softmax function
     tol: float = 1e-6,
+    return_Q: bool = False
 ) -> np.ndarray:
     n_states, n_actions, _ = T_agent.shape
     V = np.zeros(n_states)
@@ -69,6 +70,9 @@ def soft_q_iteration(
             break
 
         V = V_new
+        
+    if return_Q:
+        return policy, Q
 
     return policy
 
