@@ -31,11 +31,14 @@ from numba import jit
 # @jit(nopython=True)
 def soft_q_iteration(
     R: np.ndarray,
-    T_agent: np.ndarray,
+    T: np.ndarray,
     gamma: float,
     beta: float,
     tol: float = 1e-6,
-    return_what = "policy"
+    return_what = "policy",
+    Q_init = None,
+    V_init = None,
+    policy_init = None
 ) -> np.ndarray:
     
     '''
@@ -43,21 +46,43 @@ def soft_q_iteration(
 
     Args:
     - R (np.ndarray): The reward function R of shape (n_states,)
-    - T_agent (np.ndarray): The transition matrix T of shape (n_states, n_actions, n_states)
+    - T (np.ndarray): The transition matrix T of shape (n_states, n_actions, n_states)
     - gamma (float): The discount factor gamma
     - beta (float): Inverse temperature parameter for the Boltzmann policy
     - tol (float): Tolerance for convergence
     - return_what (str): What to return. Choose from "policy", "Q", "V"
+    - Q_init (np.ndarray): Initialization of the Q-Function of shape (n_states, n_actions), optional.
+    - V_init (np.ndarray): Initialization of the V-Function of shape (n_states,), optional.
+    - policy_init (np.ndarray): Initialization of the policy of shape (n_states, n_actions), optional.
+
+    Returns one of:
+    - policy (np.ndarray): The policy of shape (n_states, n_actions)
+    - Q (np.ndarray): The Q-Function of shape (n_states, n_actions)
+    - V (np.ndarray): The V-Function of shape (n_states,)
     '''
 
-    n_states, n_actions, _ = T_agent.shape
-    V = np.zeros(n_states)
-    Q = np.zeros((n_states, n_actions))
-    policy = np.zeros((n_states, n_actions))
+    n_states, n_actions, _ = T.shape
+
+
+    if Q_init is not None:
+        Q = Q_init
+    else:
+        Q = np.zeros((n_states, n_actions))
+
+    if V_init is not None:
+        V = V_init
+    else:
+        V = np.zeros(n_states)
+
+    if policy_init is not None:
+        policy = policy_init
+    else:
+        policy = np.zeros((n_states, n_actions))
+
     _n_iter = 0
 
     while True:
-        Q = np.einsum("ijk, k-> ij", T_agent, R+gamma*V)
+        Q = np.einsum("ijk, k-> ij", T, R+gamma*V)
 
         # Apply softmax to get a probabilistic policy
         max_Q = np.max(Q, axis=1, keepdims=True)
@@ -79,14 +104,17 @@ def soft_q_iteration(
         if _n_iter == 1_000:
             print("Warning: Soft Q-iteration did not converge within 1_000 steps.")
 
-    if return_what == "policy":
+
+    if return_what =="all":
+        return policy, Q, V
+    elif return_what == "policy":
         return policy
     elif return_what == "Q":
         return Q
     elif return_what =="V":
         return V
     else:
-        raise ValueError("Invalid return_what argument. Choose 'policy', 'Q', or 'V'. You gave: ", return_what)
+        raise ValueError("Invalid return_what argument. Choose 'all', 'policy', 'Q', or 'V'. You gave: ", return_what)
 
 
 # def soft_q_iteration_torch(
