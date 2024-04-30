@@ -533,7 +533,8 @@ class EnvironmentDesign():
                     #agents transition function according to p_sample
                     T_agent = transition_matrix(candidate_env.N, candidate_env.M, p=p_sample, absorbing_states=candidate_env.goal_states)
                     T_agent = insert_walls_into_T(T_agent, wall_indices=candidate_env.wall_states)
-                    V, _ = value_iteration_with_policy(candidate_env.R_true, T_agent, gamma_sample)
+                    # V, _ = value_iteration_with_policy(candidate_env.R_true, T_agent, gamma_sample)
+                    V = soft_q_iteration(candidate_env.R_true, T_agent, gamma_sample, beta=beta_agent, return_what="V")
                     regret += V[0] / len(posterior_samples)
                     # print("regret: ", regret)
 
@@ -546,9 +547,10 @@ class EnvironmentDesign():
 
                 T_agent_mean = transition_matrix(candidate_env.N, candidate_env.M, p=p_sample_mean, absorbing_states=candidate_env.goal_states)
                 T_agent_mean = insert_walls_into_T(T_agent_mean, wall_indices=candidate_env.wall_states)
-                V_mean, _ = value_iteration_with_policy(
-                    candidate_env.R_true, T_agent_mean, gamma_sample_mean
-                )
+                # V_mean, _ = value_iteration_with_policy(
+                #     candidate_env.R_true, T_agent_mean, gamma_sample_mean
+                # )
+                V_mean = soft_q_iteration(candidate_env.R_true, T_agent_mean, gamma_sample_mean, beta=beta_agent, return_what="V")
 
                 regret -= V_mean[0]
                 candidate_env.regret = regret

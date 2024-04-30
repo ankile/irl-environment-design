@@ -10,41 +10,53 @@ def log_likelihood_torch(T, policy, trajectory):
     return log_likelihood
 
 
-# @jit(nopython=True)
-def value_iteration_with_policy(
-    R: np.ndarray,
-    T_agent: np.ndarray,
-    gamma: float,
-    tol: float = 1e-6,
-):
-    n_states = R.shape[0]
-    V = np.zeros(n_states)
-    policy = np.zeros(n_states, dtype=np.int32)
-    while True:
-        V_new = np.zeros(n_states)
-        for s in range(n_states):
-            action_values = R[s] + gamma * np.sum(T_agent[s] * V, axis=1)
-            best_action = np.argmax(action_values)
-            V_new[s] = action_values[best_action]
-            policy[s] = best_action
-        if np.max(np.abs(V - V_new)) < tol:
-            break
-        V = V_new
-    V = V / np.max(V) * R.max()
-    return V, policy
+# # @jit(nopython=True)
+# def value_iteration_with_policy(
+#     R: np.ndarray,
+#     T_agent: np.ndarray,
+#     gamma: float,
+#     tol: float = 1e-6,
+# ):
+#     n_states = R.shape[0]
+#     V = np.zeros(n_states)
+#     policy = np.zeros(n_states, dtype=np.int32)
+#     while True:
+#         V_new = np.zeros(n_states)
+#         for s in range(n_states):
+#             action_values = R[s] + gamma * np.sum(T_agent[s] * V, axis=1)
+#             best_action = np.argmax(action_values)
+#             V_new[s] = action_values[best_action]
+#             policy[s] = best_action
+#         if np.max(np.abs(V - V_new)) < tol:
+#             break
+#         V = V_new
+#     V = V / np.max(V) * R.max()
+#     return V, policy
 
 
 # @njit
 # @jit(nopython=True)
 def soft_q_iteration(
-        
-    R: np.ndarray,  # R is a one-dimensional array with shape (n_states,)
+    R: np.ndarray,
     T_agent: np.ndarray,
     gamma: float,
-    beta: float,  # Inverse temperature parameter for the softmax function
+    beta: float,
     tol: float = 1e-6,
-
+    return_what = "policy"
 ) -> np.ndarray:
+    
+    '''
+    Computes a policy, V-Function or Q-Function using a Boltzmann-like policy.
+
+    Args:
+    - R (np.ndarray): The reward function R of shape (n_states,)
+    - T_agent (np.ndarray): The transition matrix T of shape (n_states, n_actions, n_states)
+    - gamma (float): The discount factor gamma
+    - beta (float): Inverse temperature parameter for the Boltzmann policy
+    - tol (float): Tolerance for convergence
+    - return_what (str): What to return. Choose from "policy", "Q", "V"
+    '''
+
     n_states, n_actions, _ = T_agent.shape
     V = np.zeros(n_states)
     Q = np.zeros((n_states, n_actions))
@@ -74,7 +86,14 @@ def soft_q_iteration(
         if _n_iter == 1_000:
             print("Warning: Soft Q-iteration did not converge within 1_000 steps.")
 
-    return policy
+    if return_what == "policy":
+        return policy
+    elif return_what == "Q":
+        return Q
+    elif return_what =="V":
+        return V
+    else:
+        raise ValueError("Invalid return_what argument. Choose 'policy', 'Q', or 'V'. You gave: ", return_what)
 
 
 # def soft_q_iteration_torch(
