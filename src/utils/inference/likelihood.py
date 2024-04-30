@@ -37,6 +37,7 @@ def expert_trajectory_log_likelihood(
     '''
 
     log_likelihood = 0.0
+    # print("Parameter sample: ", parameter_sample)
 
     for env, trajectories in expert_trajectories:
         assert env.goal_states is not None, "Add goal states to environment."
@@ -47,7 +48,7 @@ def expert_trajectory_log_likelihood(
         )
         for traj in trajectories:
             len_traj = len(traj)
-            log_likelihood += compute_log_likelihood(env.T_true, policy, traj)/len_traj
+            log_likelihood += compute_log_likelihood(T_agent, policy, traj)/len_traj #TODO: which T here? env.T_true or T_agent?
     if log_likelihood == -np.inf:
         print("log likelihood is negative infinity. sth is weird.")
 

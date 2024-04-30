@@ -71,7 +71,10 @@ class EnvironmentDesign():
         self.diagnostics = {}
         self.diagnostics["parameter_means"] = []
         self.diagnostics["region_of_interests"] = []
-        
+        self.diagnostics["posterior_dist"] = []
+        self.diagnostics["ROI_sizes"] = []
+        self.diagnostics["runtime_secs"] = []
+
         region_of_interest = None
 
         for episode in range(1,self.episodes):
@@ -80,14 +83,16 @@ class EnvironmentDesign():
 
             if candidate_environments_args["generate_how"] == "entropy_BM":
 
+                start_time = datetime.datetime.now()
+
 
                 #TODO min/ max values need to be inferred from ROI. Are inferred but make this cleaner, e.g. "zoom in" on BM.
                 min_gamma = 0.5
-                max_gamma = 0.99
+                max_gamma = 0.95
                 min_p = 0.5
-                max_p = 0.99
+                max_p = 0.95
                 pos_inference = PosteriorInference(self.all_observations,
-                                                   resolution=10,
+                                                   resolution=12,
                                                    min_gamma = min_gamma,
                                                    max_gamma = max_gamma,
                                                    min_p = min_p,
@@ -96,14 +101,24 @@ class EnvironmentDesign():
                 
                 print("Started computing Posterior.")
                 current_belief = pos_inference.calculate_posterior(episode=episode)
+                self.diagnostics["posterior_dist"].append(current_belief)
                 print("current_belief:", current_belief)
                 print("Finished computing Posterior.")
-                mean_params = pos_inference.mean(posterior_dist = current_belief) #TODO change this to MAP.
-                print("Mean Parameters:", mean_params)  
+
+                mean_params = pos_inference.mean(posterior_dist = current_belief)
+                self.diagnostics["parameter_means"].append(mean_params)
+                print("Mean Parameters:", mean_params)
+
                 region_of_interest = pos_inference.calculate_region_of_interest(log_likelihood = current_belief, confidence_interval=0.8)
+                self.diagnostics["region_of_interests"].append(region_of_interest)
                 print("Region of Interest:", region_of_interest)
 
-                print(f"Computed Region of Interest. Size = {round(region_of_interest.size/current_belief.size, 2)}")
+                _ROI_size = round(region_of_interest.size/current_belief.size, 2)
+                self.diagnostics["ROI_sizes"].append(_ROI_size)
+                print(f"Computed Region of Interest. Size = {_ROI_size}")
+                del _ROI_size
+                del current_belief
+
 
 
                 #TODO here we need to have a cleaner way to convert the parametrization into the actual function.
@@ -124,6 +139,8 @@ class EnvironmentDesign():
                     T_estimate = insert_walls_into_T(T=T_estimate, wall_indices=self.base_environment.wall_states)
                 else:
                     T_estimate = self.base_environment.T_true
+                del mean_params
+
 
 
                 param_estimates = ParamTuple(p = T_estimate, gamma=gamma_estimate, R = R_estimate)
@@ -154,6 +171,11 @@ class EnvironmentDesign():
                 #Generate an environment in which we observe the human with maximal information gain.
                 optimal_environment = deepcopy(self.base_environment)
                 optimal_environment.R_true = updated_reward
+
+                end_time = datetime.datetime.now()
+                run_time = end_time - start_time
+                self.diagnostics["runtime_secs"].append(run_time.total_seconds())
+                del start_time, end_time, run_time
                 
                 
 
@@ -212,7 +234,8 @@ class EnvironmentDesign():
             'user_params': self.user_params,
             'all_observations': self.all_observations,
             'episodes': self.episodes,
-            'candidate_environment_args': self.candidate_environments_args
+            'candidate_environment_args': self.candidate_environments_args,
+            'diagnostics': self.diagnostics,
         }
 
         filepath = os.path.join(os.getcwd(), "checkpoints", experiment_name, todays_date)
