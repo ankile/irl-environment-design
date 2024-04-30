@@ -13,7 +13,7 @@ from .inference.rollouts import generate_n_trajectories
 from .inference.likelihood import compute_log_likelihood
 from src.utils.inference.sampling import bayesian_parameter_learning
 from .make_environment import Environment
-from .constants import ParamTuple
+from .constants import ParamTuple, beta_agent
 from .inference.posterior import PosteriorInference
 from src.utils.make_candidate_environments import EntropyBM
 from src.worlds.mdp2d import Experiment_2D
@@ -65,9 +65,16 @@ class EnvironmentDesign():
 
         #Observe human in base environment. Append observation to all observations.
         print("Started episode 0.")
-        observation = self._observe_human(environment=self.base_environment, n_trajectories=2)
+        observation = self._observe_human(environment=self.base_environment, n_trajectories=1)
         self.all_observations.append(observation)
         print("Finished episode 0.")
+        self.diagnostics = {}
+        self.diagnostics["parameter_means"] = []
+        self.diagnostics["region_of_interests"] = []
+        self.diagnostics["posterior_dist"] = []
+        self.diagnostics["ROI_sizes"] = []
+        self.diagnostics["runtime_secs"] = []
+
         region_of_interest = None
 
         for episode in range(1,self.episodes):
@@ -76,14 +83,16 @@ class EnvironmentDesign():
 
             if candidate_environments_args["generate_how"] == "entropy_BM":
 
+                start_time = datetime.datetime.now()
+
 
                 #TODO min/ max values need to be inferred from ROI. Are inferred but make this cleaner, e.g. "zoom in" on BM.
-                min_gamma = 0.7
-                max_gamma = 0.99
-                min_p = 0.7
-                max_p = 0.99
+                min_gamma = 0.5
+                max_gamma = 0.95
+                min_p = 0.5
+                max_p = 0.95
                 pos_inference = PosteriorInference(self.all_observations,
-                                                   resolution=10,
+                                                   resolution=12,
                                                    min_gamma = min_gamma,
                                                    max_gamma = max_gamma,
                                                    min_p = min_p,
@@ -92,33 +101,46 @@ class EnvironmentDesign():
                 
                 print("Started computing Posterior.")
                 current_belief = pos_inference.calculate_posterior(episode=episode)
+                self.diagnostics["posterior_dist"].append(current_belief)
                 print("current_belief:", current_belief)
                 print("Finished computing Posterior.")
-                map_params = pos_inference.mean(posterior_dist = current_belief) #TODO change this to MAP.
+
+                mean_params = pos_inference.mean(posterior_dist = current_belief)
+                self.diagnostics["parameter_means"].append(mean_params)
+                print("Mean Parameters:", mean_params)
+
                 region_of_interest = pos_inference.calculate_region_of_interest(log_likelihood = current_belief, confidence_interval=0.8)
+                self.diagnostics["region_of_interests"].append(region_of_interest)
                 print("Region of Interest:", region_of_interest)
 
-                print(f"Computed Region of Interest. Size = {round(region_of_interest.size/current_belief.size, 2)}")
+                _ROI_size = round(region_of_interest.size/current_belief.size, 2)
+                self.diagnostics["ROI_sizes"].append(_ROI_size)
+                print(f"Computed Region of Interest. Size = {_ROI_size}")
+                del _ROI_size
+                del current_belief
+
 
 
                 #TODO here we need to have a cleaner way to convert the parametrization into the actual function.
                 if "R" in self.learn_what:
-                    R_estimate = map_params.R
+                    R_estimate = mean_params.R
                 else:
                     R_estimate = self.user_params.R
 
 
                 if "gamma" in self.learn_what:
-                    gamma_estimate = map_params.gamma
+                    gamma_estimate = mean_params.gamma
                 else:
                     gamma_estimate = self.user_params.gamma
 
 
                 if "T" in self.learn_what:
-                    T_estimate = transition_matrix(self.base_environment.N, self.base_environment.M, p=map_params.p, absorbing_states=self.base_environment.goal_states)
+                    T_estimate = transition_matrix(self.base_environment.N, self.base_environment.M, p=mean_params.p, absorbing_states=self.base_environment.goal_states)
                     T_estimate = insert_walls_into_T(T=T_estimate, wall_indices=self.base_environment.wall_states)
                 else:
                     T_estimate = self.base_environment.T_true
+                del mean_params
+
 
 
                 param_estimates = ParamTuple(p = T_estimate, gamma=gamma_estimate, R = R_estimate)
@@ -149,6 +171,11 @@ class EnvironmentDesign():
                 #Generate an environment in which we observe the human with maximal information gain.
                 optimal_environment = deepcopy(self.base_environment)
                 optimal_environment.R_true = updated_reward
+
+                end_time = datetime.datetime.now()
+                run_time = end_time - start_time
+                self.diagnostics["runtime_secs"].append(run_time.total_seconds())
+                del start_time, end_time, run_time
                 
                 
 
@@ -207,7 +234,8 @@ class EnvironmentDesign():
             'user_params': self.user_params,
             'all_observations': self.all_observations,
             'episodes': self.episodes,
-            'candidate_environment_args': self.candidate_environments_args
+            'candidate_environment_args': self.candidate_environments_args,
+            'diagnostics': self.diagnostics,
         }
 
         filepath = os.path.join(os.getcwd(), "checkpoints", experiment_name, todays_date)
@@ -284,7 +312,7 @@ class EnvironmentDesign():
         
         elif generate_how == "Naive_BM":
             
-        
+            raise NotImplementedError("Naive BM not implemented yet.")
 
         else:
         
@@ -294,7 +322,7 @@ class EnvironmentDesign():
 
     def _observe_human(self,
                       environment: Environment,
-                      n_trajectories: int=2):
+                      n_trajectories: int=1):
         
         '''
         Observe human in an environment n_trajectories times.
@@ -310,7 +338,8 @@ class EnvironmentDesign():
         #Calculate policy of agent in environment.
         T_agent = transition_matrix(environment.N, environment.M, p=self.user_params.p, absorbing_states=environment.goal_states)
         T_agent = insert_walls_into_T(T=T_agent, wall_indices=environment.wall_states)
-        agent_policy = soft_q_iteration(self.user_params.R, T_agent, gamma=self.user_params.gamma, beta=1000)
+        #Here we use the (possibly updated) reward function and not the initial ('true') reward function
+        agent_policy = soft_q_iteration(environment.R_true, T_agent, gamma=self.user_params.gamma, beta=beta_agent)
 
         # Generate trajectories.
         trajectories = generate_n_trajectories(

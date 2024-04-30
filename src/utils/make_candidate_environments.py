@@ -2,19 +2,13 @@ from copy import deepcopy
 
 import matplotlib.pyplot as plt
 import numpy as np
-<<<<<<< HEAD
 import torch
 from scipy import stats
-=======
->>>>>>> main
 
 import src.utils.behavior_map as bm
 from src.worlds.mdp2d import Experiment_2D
 from src.utils.make_environment import insert_walls_into_T
-<<<<<<< HEAD
 from src.utils.optimization import differentiate_V
-=======
->>>>>>> main
 
 
 
@@ -22,11 +16,8 @@ from src.utils.optimization import differentiate_V
 Functions to generate candidate environments.
 '''
 
-<<<<<<< HEAD
 
 
-=======
->>>>>>> main
 def make_world(
     height: int,
     width: int,
@@ -50,7 +41,6 @@ def make_world(
     return experiment
 
 
-<<<<<<< HEAD
 class EntropyBM():
 
     '''
@@ -86,14 +76,16 @@ class EntropyBM():
         Returns:
         - behavior_ROI (list): The Behavior Map restricted to the Region of Interest.
         '''
+        _n_rows = behavior_map.data.shape[0]
+        _n_cols = behavior_map.data.shape[1]
 
         self.behavior_ROI = []
-        for i in range(behavior_map.data.shape[0]):
-            for j in range(behavior_map.data.shape[1]):
-                if (i*j) in self.region_of_interest:
+        for i in range(_n_rows):
+            for j in range(_n_cols):
+                if (i*_n_rows + j) in self.region_of_interest:
                     self.behavior_ROI.append(behavior_map.data[i,j])
 
-        # print("self.behavior_ROI", self.behavior_ROI)
+        del _n_rows, _n_cols
 
 
     def compute_covers(self, behavior_map):
@@ -212,13 +204,13 @@ class EntropyBM():
 
             #Update Reward Function
             _world.rewards = R.detach().numpy()
+        print(f"Finished BM Search. Entropy: {_max_ent}.")
+        # print("Behavior Map: ", bm_out)
 
         return max_ent_R
         
 
 
-=======
->>>>>>> main
 class AgnosticsBM():
 
     '''

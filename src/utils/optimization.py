@@ -42,20 +42,26 @@ def soft_q_iteration(
     gamma: float,
     beta: float,  # Inverse temperature parameter for the softmax function
     tol: float = 1e-6,
+    return_Q: bool = False
 ) -> np.ndarray:
     n_states, n_actions, _ = T_agent.shape
     V = np.zeros(n_states)
     Q = np.zeros((n_states, n_actions))
     policy = np.zeros((n_states, n_actions))
+    _n_iter = 0
+    
 
     while True:
-        for s in range(n_states):
-            for a in range(n_actions):
+        # for s in range(n_states):
+        #     for a in range(n_actions):
                 # Calculate the Q-value for action a in state s
-                Q[s, a] = R[s] + gamma * np.dot(T_agent[s, a], V)
+        # Q = np.matmul(T_agent, R+gamma*V)
+        Q = np.einsum("ijk, k-> ij", T_agent, R+gamma*V)
 
         # Apply softmax to get a probabilistic policy
         max_Q = np.max(Q, axis=1, keepdims=True)
+
+
         # Subtract max_Q for numerical stability
         exp_Q = np.exp(beta * (Q - max_Q))
         policy = exp_Q / np.sum(exp_Q, axis=1, keepdims=True)
@@ -69,6 +75,13 @@ def soft_q_iteration(
             break
 
         V = V_new
+        _n_iter += 1
+
+        if _n_iter == 1_000:
+            print("Warning: Soft Q-iteration did not converge within 1_000 steps.")
+        
+    if return_Q:
+        return policy, Q
 
     return policy
 
