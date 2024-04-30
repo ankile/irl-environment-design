@@ -437,7 +437,7 @@ class EnvironmentDesign():
                     # 4.1.1 Find the optimal policy for this env and posterior sample
                     T_agent = transition_matrix(candidate_env.N, candidate_env.M, p=p, absorbing_states=candidate_env.goal_states)
                     T_agent = insert_walls_into_T(T_agent, wall_indices=candidate_env.wall_states)
-                    policy = soft_q_iteration(R, T_agent, gamma=gamma, beta=1000)
+                    policy = soft_q_iteration(R, T_agent, gamma=gamma, beta=beta_agent)
                     policies.append(policy)
 
                     # 4.1.2 Generate $m$ trajectories from this policy
