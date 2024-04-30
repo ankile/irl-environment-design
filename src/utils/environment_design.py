@@ -1,5 +1,3 @@
-from typing import List
-
 import os
 from tqdm import tqdm
 import numpy as np
@@ -8,7 +6,8 @@ import datetime
 from copy import deepcopy
 
 from .make_environment import transition_matrix, insert_walls_into_T
-from .optimization import soft_q_iteration, grad_policy_maximization, value_iteration_with_policy
+from .optimization import soft_q_iteration, grad_policy_maximization
+# from .optimization import value_iteration_with_policy
 from .inference.rollouts import generate_n_trajectories
 from .inference.likelihood import compute_log_likelihood
 from src.utils.inference.sampling import bayesian_parameter_learning
@@ -99,11 +98,8 @@ class EnvironmentDesign():
                                                    max_p = max_p,
                                                    region_of_interest=region_of_interest)
                 
-                print("Started computing Posterior.")
                 current_belief = pos_inference.calculate_posterior(episode=episode)
                 self.diagnostics["posterior_dist"].append(current_belief)
-                print("current_belief:", current_belief)
-                print("Finished computing Posterior.")
 
                 mean_params = pos_inference.mean(posterior_dist = current_belief)
                 self.diagnostics["parameter_means"].append(mean_params)
@@ -111,7 +107,6 @@ class EnvironmentDesign():
 
                 region_of_interest = pos_inference.calculate_region_of_interest(log_likelihood = current_belief, confidence_interval=0.8)
                 self.diagnostics["region_of_interests"].append(region_of_interest)
-                print("Region of Interest:", region_of_interest)
 
                 _ROI_size = round(region_of_interest.size/current_belief.size, 2)
                 self.diagnostics["ROI_sizes"].append(_ROI_size)
@@ -165,9 +160,7 @@ class EnvironmentDesign():
                                                       n_compute_BM = 5,
                                                       n_iterations_gradient=20,
                                                       stepsize_gradient=0.001)
-                
-                print("Learned Reward Function that maximizes Entropy. Reward function: ", updated_reward)
-                
+                                
                 #Generate an environment in which we observe the human with maximal information gain.
                 optimal_environment = deepcopy(self.base_environment)
                 optimal_environment.R_true = updated_reward

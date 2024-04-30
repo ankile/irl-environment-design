@@ -183,7 +183,6 @@ class EntropyBM():
 
         for i in range(n_compute_BM):
 
-            # print(f"Computing BM {i} of {n_compute_BM}")
 
             # Compute Behavior Map
             bm_out = bm.plot_bmap(world=_world, gammas=self.gammas, probs=self.probs)
@@ -195,7 +194,6 @@ class EntropyBM():
             #Check if the current Behavior Map has higher entropy.
             if entropy_BM > _max_ent:
                 max_ent_possible = stats.entropy(np.repeat(max_ent_prob, repeats=int(1/max_ent_prob)))
-                # print(f"New Maximum Entropy Reward Function! Entropy: {entropy_BM}. Maximum Entropy possible: {max_ent_possible}.")
                 _max_ent = entropy_BM
                 max_ent_R = R
 
@@ -205,7 +203,6 @@ class EntropyBM():
             #Update Reward Function
             _world.rewards = R.detach().numpy()
         print(f"Finished BM Search. Entropy: {_max_ent}.")
-        # print("Behavior Map: ", bm_out)
 
         return max_ent_R
         

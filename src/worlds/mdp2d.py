@@ -9,37 +9,39 @@ import seaborn as sns
 from numba import njit
 
 from src.utils.make_environment import transition_matrix, insert_walls_into_T, transition_matrix_is_valid
+from src.utils.optimization import soft_q_iteration
+from src.utils.constants import beta_agent
 
 
 
-@njit(nopython=True)
-def value_iteration_with_policy(
-    R: np.ndarray,
-    T_agent: np.ndarray,
-    gamma: float,
-    tol: float = 1e-6,
-    V: np.array = None,
-    policy: np.array = None
-):
+# @njit(nopython=True)
+# def value_iteration_with_policy(
+#     R: np.ndarray,
+#     T_agent: np.ndarray,
+#     gamma: float,
+#     tol: float = 1e-6,
+#     V: np.array = None,
+#     policy: np.array = None
+# ):
     
-    n_states = R.shape[0]
-    if V is None:
-        V = np.zeros(n_states, dtype=np.float64)
-    if policy is None:
-        policy = np.zeros(n_states, dtype=np.float64)
+#     n_states = R.shape[0]
+#     if V is None:
+#         V = np.zeros(n_states, dtype=np.float64)
+#     if policy is None:
+#         policy = np.zeros(n_states, dtype=np.float64)
 
-    while True:
-        V_new = np.zeros(n_states)
-        for s in range(n_states):
-            action_values = R[s] + gamma * np.sum(T_agent[s] * V, axis=1)
-            best_action = np.argmax(action_values)
-            V_new[s] = action_values[best_action]
-            policy[s] = best_action
-        if np.max(np.abs(V - V_new)) < tol:
-            break
-        V = V_new
-    V = V / np.max(V) * R.max()
-    return V, policy
+#     while True:
+#         V_new = np.zeros(n_states)
+#         for s in range(n_states):
+#             action_values = R[s] + gamma * np.sum(T_agent[s] * V, axis=1)
+#             best_action = np.argmax(action_values)
+#             V_new[s] = action_values[best_action]
+#             policy[s] = best_action
+#         if np.max(np.abs(V - V_new)) < tol:
+#             break
+#         V = V_new
+#     V = V / np.max(V) * R.max()
+#     return V, policy
 
 
 
@@ -103,24 +105,19 @@ class MDP_2D:
             plt.show()
 
     def solve(
-        self,
-        setup_name="Placeholder Setup Name",
-        policy_name="Placeholder Policy Name",
-        save_heatmap=True,
-        show_heatmap=False,
-        heatmap_ax=None,
-        heatmap_mask=None,
-        base_dir="images",
-        label_precision=3,
+        self
     ):
 
         
-        self.V, self.policy = value_iteration_with_policy(self.R, self.T, self.gamma, V = self.V.flatten(), policy=self.policy.flatten())
+        # self.V, self.policy = value_iteration_with_policy(self.R, self.T, self.gamma, V = self.V.flatten(), policy=self.policy.flatten())
+        self.policy = soft_q_iteration(self.R, self.T, self.gamma, beta=beta_agent, return_what="policy")
 
+        # self.policy = np.reshape(self.policy,  newshape=(self.height, self.width))
+        # self.V = np.reshape(self.V,  newshape=(self.height, self.width))
 
+        #Convert stochastic Boltzmann policy into determinstic, greedy policy for rollouts.
+        self.policy = np.argmax(self.policy, axis=1)
         self.policy = np.reshape(self.policy,  newshape=(self.height, self.width))
-        self.V = np.reshape(self.V,  newshape=(self.height, self.width))
-
 
         return self.policy
 

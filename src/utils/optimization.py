@@ -3,13 +3,6 @@ import torch
 from numba import jit
 
 
-def log_likelihood_torch(T, policy, trajectory):
-    log_likelihood = torch.tensor(0.0)
-    for s, a, next_s in trajectory[:-1]:
-        log_likelihood += torch.log(T[s, a, next_s] * policy[s, a])
-    return log_likelihood
-
-
 # # @jit(nopython=True)
 # def value_iteration_with_policy(
 #     R: np.ndarray,
@@ -131,46 +124,6 @@ def soft_q_iteration(
 #     return policy
 
 
-def grad_policy_maximization(
-    n_states, n_actions, trajectories, T_true, beta=10, n_iter=1_000
-):
-    Q = torch.zeros(n_states, n_actions, requires_grad=True)
-
-    optimizer = torch.optim.Adam([Q], lr=0.1)
-    T_true = torch.tensor(T_true)
-    old_pi = torch.zeros(n_states, n_actions)
-
-    for _ in range(n_iter):
-        optimizer.zero_grad()
-
-        # Derive the policy from the Q-function
-        # Apply softmax to get a probabilistic policy
-        max_Q = torch.max(Q, axis=1, keepdims=True)[0]
-        # max_Q = max_along_axis_1(Q)
-        # Subtract max_Q for numerical stability
-        exp_Q = torch.exp(beta * (Q - max_Q))
-        policy = exp_Q / torch.sum(exp_Q, axis=1, keepdims=True)
-
-        mean_log_likelihood = torch.stack(
-            [
-                log_likelihood_torch(T_true, policy, traj)
-                for traj in trajectories
-            ]
-        ).mean()
-        (-mean_log_likelihood).backward()
-        optimizer.step()
-
-        # Check for convergence
-        if torch.max(torch.abs(policy - old_pi)) < 1e-3:
-            break
-
-        old_pi = policy.detach()
-
-    policy = torch.softmax(Q.detach(), dim=1)
-
-    return policy.numpy()
-
-
 def soft_bellman_update_V(R, gamma, T, V):
     return torch.log(torch.sum(torch.exp(torch.matmul(T, R+gamma*V)), axis=1))
 
@@ -237,3 +190,55 @@ def differentiate_V(R: torch.tensor, gamma: torch.tensor, T: torch.tensor, V: to
     T_grad_out = - torch.einsum('ij,jkl->ikl', df_dw_inv, T_grad.grad)
 
     return V_star, R_grad_out, T_grad_out
+
+
+'''
+Legacy code for likelihood maximization in the original Environment Design approach when we replace the value function by the
+likelihood function.
+'''
+
+def log_likelihood_torch(T, policy, trajectory):
+    log_likelihood = torch.tensor(0.0)
+    for s, a, next_s in trajectory[:-1]:
+        log_likelihood += torch.log(T[s, a, next_s] * policy[s, a])
+    return log_likelihood
+
+
+def grad_policy_maximization(
+    n_states, n_actions, trajectories, T_true, beta=10, n_iter=1_000
+):
+    Q = torch.zeros(n_states, n_actions, requires_grad=True)
+
+    optimizer = torch.optim.Adam([Q], lr=0.1)
+    T_true = torch.tensor(T_true)
+    old_pi = torch.zeros(n_states, n_actions)
+
+    for _ in range(n_iter):
+        optimizer.zero_grad()
+
+        # Derive the policy from the Q-function
+        # Apply softmax to get a probabilistic policy
+        max_Q = torch.max(Q, axis=1, keepdims=True)[0]
+        # max_Q = max_along_axis_1(Q)
+        # Subtract max_Q for numerical stability
+        exp_Q = torch.exp(beta * (Q - max_Q))
+        policy = exp_Q / torch.sum(exp_Q, axis=1, keepdims=True)
+
+        mean_log_likelihood = torch.stack(
+            [
+                log_likelihood_torch(T_true, policy, traj)
+                for traj in trajectories
+            ]
+        ).mean()
+        (-mean_log_likelihood).backward()
+        optimizer.step()
+
+        # Check for convergence
+        if torch.max(torch.abs(policy - old_pi)) < 1e-3:
+            break
+
+        old_pi = policy.detach()
+
+    policy = torch.softmax(Q.detach(), dim=1)
+
+    return policy.numpy()
