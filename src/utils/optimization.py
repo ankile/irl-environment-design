@@ -3,64 +3,89 @@ import torch
 from numba import jit
 
 
-def log_likelihood_torch(T, policy, trajectory):
-    log_likelihood = torch.tensor(0.0)
-    for s, a, next_s in trajectory[:-1]:
-        log_likelihood += torch.log(T[s, a, next_s] * policy[s, a])
-    return log_likelihood
-
-
-# @jit(nopython=True)
-def value_iteration_with_policy(
-    R: np.ndarray,
-    T_agent: np.ndarray,
-    gamma: float,
-    tol: float = 1e-6,
-):
-    n_states = R.shape[0]
-    V = np.zeros(n_states)
-    policy = np.zeros(n_states, dtype=np.int32)
-    while True:
-        V_new = np.zeros(n_states)
-        for s in range(n_states):
-            action_values = R[s] + gamma * np.sum(T_agent[s] * V, axis=1)
-            best_action = np.argmax(action_values)
-            V_new[s] = action_values[best_action]
-            policy[s] = best_action
-        if np.max(np.abs(V - V_new)) < tol:
-            break
-        V = V_new
-    V = V / np.max(V) * R.max()
-    return V, policy
+# # @jit(nopython=True)
+# def value_iteration_with_policy(
+#     R: np.ndarray,
+#     T_agent: np.ndarray,
+#     gamma: float,
+#     tol: float = 1e-6,
+# ):
+#     n_states = R.shape[0]
+#     V = np.zeros(n_states)
+#     policy = np.zeros(n_states, dtype=np.int32)
+#     while True:
+#         V_new = np.zeros(n_states)
+#         for s in range(n_states):
+#             action_values = R[s] + gamma * np.sum(T_agent[s] * V, axis=1)
+#             best_action = np.argmax(action_values)
+#             V_new[s] = action_values[best_action]
+#             policy[s] = best_action
+#         if np.max(np.abs(V - V_new)) < tol:
+#             break
+#         V = V_new
+#     V = V / np.max(V) * R.max()
+#     return V, policy
 
 
 # @njit
 # @jit(nopython=True)
 def soft_q_iteration(
-    R: np.ndarray,  # R is a one-dimensional array with shape (n_states,)
-    T_agent: np.ndarray,
+    R: np.ndarray,
+    T: np.ndarray,
     gamma: float,
-    beta: float,  # Inverse temperature parameter for the softmax function
+    beta: float,
     tol: float = 1e-6,
-    return_Q: bool = False
+    return_what = "policy",
+    Q_init = None,
+    V_init = None,
+    policy_init = None
 ) -> np.ndarray:
-    n_states, n_actions, _ = T_agent.shape
-    V = np.zeros(n_states)
-    Q = np.zeros((n_states, n_actions))
-    policy = np.zeros((n_states, n_actions))
-    _n_iter = 0
     
+    '''
+    Computes a policy, V-Function or Q-Function using a Boltzmann-like policy.
+
+    Args:
+    - R (np.ndarray): The reward function R of shape (n_states,)
+    - T (np.ndarray): The transition matrix T of shape (n_states, n_actions, n_states)
+    - gamma (float): The discount factor gamma
+    - beta (float): Inverse temperature parameter for the Boltzmann policy
+    - tol (float): Tolerance for convergence
+    - return_what (str): What to return. Choose from "policy", "Q", "V"
+    - Q_init (np.ndarray): Initialization of the Q-Function of shape (n_states, n_actions), optional.
+    - V_init (np.ndarray): Initialization of the V-Function of shape (n_states,), optional.
+    - policy_init (np.ndarray): Initialization of the policy of shape (n_states, n_actions), optional.
+
+    Returns one of:
+    - policy (np.ndarray): The policy of shape (n_states, n_actions)
+    - Q (np.ndarray): The Q-Function of shape (n_states, n_actions)
+    - V (np.ndarray): The V-Function of shape (n_states,)
+    '''
+
+    n_states, n_actions, _ = T.shape
+
+
+    if Q_init is not None:
+        Q = Q_init
+    else:
+        Q = np.zeros((n_states, n_actions))
+
+    if V_init is not None:
+        V = V_init
+    else:
+        V = np.zeros(n_states)
+
+    if policy_init is not None:
+        policy = policy_init
+    else:
+        policy = np.zeros((n_states, n_actions))
+
+    _n_iter = 0
 
     while True:
-        # for s in range(n_states):
-        #     for a in range(n_actions):
-                # Calculate the Q-value for action a in state s
-        # Q = np.matmul(T_agent, R+gamma*V)
-        Q = np.einsum("ijk, k-> ij", T_agent, R+gamma*V)
+        Q = np.einsum("ijk, k-> ij", T, R+gamma*V)
 
         # Apply softmax to get a probabilistic policy
         max_Q = np.max(Q, axis=1, keepdims=True)
-
 
         # Subtract max_Q for numerical stability
         exp_Q = np.exp(beta * (Q - max_Q))
@@ -68,7 +93,6 @@ def soft_q_iteration(
 
         # Calculate the value function V using the probabilistic policy
         V_new = np.sum(policy * Q, axis=1)
-        # V_new = sum_along_axis_1(policy * Q)
 
         # Check for convergence
         if np.max(np.abs(V - V_new)) < tol:
@@ -79,86 +103,53 @@ def soft_q_iteration(
 
         if _n_iter == 1_000:
             print("Warning: Soft Q-iteration did not converge within 1_000 steps.")
-        
-    if return_Q:
-        return policy, Q
-
-    return policy
 
 
-def soft_q_iteration_torch(
-    R: torch.Tensor,  # R is a one-dimensional tensor with shape (n_states,)
-    T_agent: torch.Tensor,
-    gamma: float,
-    beta: float,  # Inverse temperature parameter for the softmax function
-    tol: float = 1e-6,
-) -> torch.Tensor:
-    n_states, n_actions, _ = T_agent.shape
-    V = torch.zeros(n_states)
-    Q = torch.zeros((n_states, n_actions))
-    policy = torch.zeros((n_states, n_actions))
-
-    while True:
-        for s in range(n_states):
-            for a in range(n_actions):
-                # Calculate the Q-value for action a in state s
-                Q[s, a] = R[s] + gamma * torch.dot(T_agent[s, a], V)
-
-        # Apply softmax to get a probabilistic policy
-        max_Q = torch.max(Q, axis=1, keepdim=True)[0]
-        exp_Q = torch.exp(beta * (Q - max_Q))  # Subtract max_Q for numerical stability
-        policy = exp_Q / torch.sum(exp_Q, axis=1, keepdim=True)
-
-        # Calculate the value function V using the probabilistic policy
-        V_new = torch.sum(policy * Q, axis=1)
-
-        # Check for convergence
-        if torch.max(torch.abs(V - V_new)) < tol:
-            break
-
-        V = V_new
-
-    return policy
+    if return_what =="all":
+        return policy, Q, V
+    elif return_what == "policy":
+        return policy
+    elif return_what == "Q":
+        return Q
+    elif return_what =="V":
+        return V
+    else:
+        raise ValueError("Invalid return_what argument. Choose 'all', 'policy', 'Q', or 'V'. You gave: ", return_what)
 
 
-def grad_policy_maximization(
-    n_states, n_actions, trajectories, T_true, beta=10, n_iter=1_000
-):
-    Q = torch.zeros(n_states, n_actions, requires_grad=True)
+# def soft_q_iteration_torch(
+#     R: torch.Tensor,  # R is a one-dimensional tensor with shape (n_states,)
+#     T_agent: torch.Tensor,
+#     gamma: float,
+#     beta: float,  # Inverse temperature parameter for the softmax function
+#     tol: float = 1e-6,
+# ) -> torch.Tensor:
+#     n_states, n_actions, _ = T_agent.shape
+#     V = torch.zeros(n_states)
+#     Q = torch.zeros((n_states, n_actions))
+#     policy = torch.zeros((n_states, n_actions))
 
-    optimizer = torch.optim.Adam([Q], lr=0.1)
-    T_true = torch.tensor(T_true)
-    old_pi = torch.zeros(n_states, n_actions)
+#     while True:
+#         for s in range(n_states):
+#             for a in range(n_actions):
+#                 # Calculate the Q-value for action a in state s
+#                 Q[s, a] = R[s] + gamma * torch.dot(T_agent[s, a], V)
 
-    for _ in range(n_iter):
-        optimizer.zero_grad()
+#         # Apply softmax to get a probabilistic policy
+#         max_Q = torch.max(Q, axis=1, keepdim=True)[0]
+#         exp_Q = torch.exp(beta * (Q - max_Q))  # Subtract max_Q for numerical stability
+#         policy = exp_Q / torch.sum(exp_Q, axis=1, keepdim=True)
 
-        # Derive the policy from the Q-function
-        # Apply softmax to get a probabilistic policy
-        max_Q = torch.max(Q, axis=1, keepdims=True)[0]
-        # max_Q = max_along_axis_1(Q)
-        # Subtract max_Q for numerical stability
-        exp_Q = torch.exp(beta * (Q - max_Q))
-        policy = exp_Q / torch.sum(exp_Q, axis=1, keepdims=True)
+#         # Calculate the value function V using the probabilistic policy
+#         V_new = torch.sum(policy * Q, axis=1)
 
-        mean_log_likelihood = torch.stack(
-            [
-                log_likelihood_torch(T_true, policy, traj)
-                for traj in trajectories
-            ]
-        ).mean()
-        (-mean_log_likelihood).backward()
-        optimizer.step()
+#         # Check for convergence
+#         if torch.max(torch.abs(V - V_new)) < tol:
+#             break
 
-        # Check for convergence
-        if torch.max(torch.abs(policy - old_pi)) < 1e-3:
-            break
+#         V = V_new
 
-        old_pi = policy.detach()
-
-    policy = torch.softmax(Q.detach(), dim=1)
-
-    return policy.numpy()
+#     return policy
 
 
 def soft_bellman_update_V(R, gamma, T, V):
@@ -227,3 +218,55 @@ def differentiate_V(R: torch.tensor, gamma: torch.tensor, T: torch.tensor, V: to
     T_grad_out = - torch.einsum('ij,jkl->ikl', df_dw_inv, T_grad.grad)
 
     return V_star, R_grad_out, T_grad_out
+
+
+'''
+Legacy code for likelihood maximization in the original Environment Design approach when we replace the value function by the
+likelihood function.
+'''
+
+def log_likelihood_torch(T, policy, trajectory):
+    log_likelihood = torch.tensor(0.0)
+    for s, a, next_s in trajectory[:-1]:
+        log_likelihood += torch.log(T[s, a, next_s] * policy[s, a])
+    return log_likelihood
+
+
+def grad_policy_maximization(
+    n_states, n_actions, trajectories, T_true, beta=10, n_iter=1_000
+):
+    Q = torch.zeros(n_states, n_actions, requires_grad=True)
+
+    optimizer = torch.optim.Adam([Q], lr=0.1)
+    T_true = torch.tensor(T_true)
+    old_pi = torch.zeros(n_states, n_actions)
+
+    for _ in range(n_iter):
+        optimizer.zero_grad()
+
+        # Derive the policy from the Q-function
+        # Apply softmax to get a probabilistic policy
+        max_Q = torch.max(Q, axis=1, keepdims=True)[0]
+        # max_Q = max_along_axis_1(Q)
+        # Subtract max_Q for numerical stability
+        exp_Q = torch.exp(beta * (Q - max_Q))
+        policy = exp_Q / torch.sum(exp_Q, axis=1, keepdims=True)
+
+        mean_log_likelihood = torch.stack(
+            [
+                log_likelihood_torch(T_true, policy, traj)
+                for traj in trajectories
+            ]
+        ).mean()
+        (-mean_log_likelihood).backward()
+        optimizer.step()
+
+        # Check for convergence
+        if torch.max(torch.abs(policy - old_pi)) < 1e-3:
+            break
+
+        old_pi = policy.detach()
+
+    policy = torch.softmax(Q.detach(), dim=1)
+
+    return policy.numpy()

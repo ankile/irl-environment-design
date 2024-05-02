@@ -53,7 +53,11 @@ class EntropyBM():
     - region_of_interest (list): The region of interest in the Behavior Map.
     '''
 
-    def __init__(self, parameter_estimates, gammas, probs, region_of_interest) -> None:
+    def __init__(self, parameter_estimates, 
+                 gammas, 
+                 probs, 
+                 region_of_interest,
+                 verbose) -> None:
 
         self.estimate_R = parameter_estimates.R
         self.estimate_gamma = parameter_estimates.gamma
@@ -62,6 +66,7 @@ class EntropyBM():
         self.gammas = gammas
         self.probs = probs
         self.region_of_interest = region_of_interest
+        self.verbose = verbose
 
 
     #TODO make this pretty, currently only works for 2-dim Behavior Map.
@@ -158,8 +163,7 @@ class EntropyBM():
 
                 if cover > max_ent_cover:
                     #Inhibit Behavior.
-                    R = R - stepsize * _masked_gradient_R
-                    
+                    R = R - stepsize * _masked_gradient_R  
 
                 else:
                     #Excite Behavior.
@@ -167,6 +171,7 @@ class EntropyBM():
 
         return R
     
+
     def BM_search(self, world, n_compute_BM: int, n_iterations_gradient: int = 20, stepsize_gradient: float = 0.01):
 
         '''
@@ -183,7 +188,6 @@ class EntropyBM():
 
         for i in range(n_compute_BM):
 
-            # print(f"Computing BM {i} of {n_compute_BM}")
 
             # Compute Behavior Map
             bm_out = bm.plot_bmap(world=_world, gammas=self.gammas, probs=self.probs)
@@ -195,7 +199,6 @@ class EntropyBM():
             #Check if the current Behavior Map has higher entropy.
             if entropy_BM > _max_ent:
                 max_ent_possible = stats.entropy(np.repeat(max_ent_prob, repeats=int(1/max_ent_prob)))
-                # print(f"New Maximum Entropy Reward Function! Entropy: {entropy_BM}. Maximum Entropy possible: {max_ent_possible}.")
                 _max_ent = entropy_BM
                 max_ent_R = R
 
@@ -204,8 +207,8 @@ class EntropyBM():
 
             #Update Reward Function
             _world.rewards = R.detach().numpy()
-        print(f"Finished BM Search. Entropy: {_max_ent}.")
-        # print("Behavior Map: ", bm_out)
+        if self.verbose:
+            print(f"Finished BM Search. Entropy: {_max_ent}.")
 
         return max_ent_R
         

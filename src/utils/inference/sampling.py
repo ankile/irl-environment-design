@@ -7,7 +7,6 @@ from tqdm import trange
 from ..constants import ParamTuple, p_limits, gamma_limits, R_limits, StateTransition, KnownParameter, beta_agent
 from .likelihood import expert_trajectory_log_likelihood
 from ..make_environment import Environment, transition_matrix, insert_walls_into_T
-from ..optimization import soft_q_iteration
 
 '''
 Functions for posterior sampling using Metropolis Hastings

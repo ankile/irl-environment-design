@@ -1,5 +1,3 @@
-from typing import List
-
 import os
 from tqdm import tqdm
 import numpy as np
@@ -8,7 +6,8 @@ import datetime
 from copy import deepcopy
 
 from .make_environment import transition_matrix, insert_walls_into_T
-from .optimization import soft_q_iteration, grad_policy_maximization, value_iteration_with_policy
+from .optimization import soft_q_iteration, grad_policy_maximization
+# from .optimization import value_iteration_with_policy
 from .inference.rollouts import generate_n_trajectories
 from .inference.likelihood import compute_log_likelihood
 from src.utils.inference.sampling import bayesian_parameter_learning
@@ -47,7 +46,8 @@ class EnvironmentDesign():
     def run_n_episodes(self,
                        n_episodes: int,
                        candidate_environments_args: dict,
-                       bayesian_regret_how = None,):
+                       bayesian_regret_how = None,
+                       verbose: bool=False):
         
         '''
         Run Environment Design for n_episodes episodes.
@@ -58,16 +58,19 @@ class EnvironmentDesign():
         - n_episodes: number of episodes to run environment design for.
         - bayesian_regret_how: how to evaluate the Bayesian Regret. Supported methods: ['value', 'likelihood'].
         - candidate_environments_args: dict for the respective candidate generation method.
+        - verbose: whether to print progress.
         '''
         
         self.episodes = n_episodes
         self.candidate_environments_args = candidate_environments_args
 
         #Observe human in base environment. Append observation to all observations.
-        print("Started episode 0.")
+        if verbose:
+            print("Started episode 0.")
         observation = self._observe_human(environment=self.base_environment, n_trajectories=1)
         self.all_observations.append(observation)
-        print("Finished episode 0.")
+        if verbose:
+            print("Finished episode 0.")
         self.diagnostics = {}
         self.diagnostics["parameter_means"] = []
         self.diagnostics["region_of_interests"] = []
@@ -79,7 +82,8 @@ class EnvironmentDesign():
 
         for episode in range(1,self.episodes):
         
-            print(f"Started episode {episode}.")
+            if verbose:
+                print(f"Started episode {episode}.")
 
             if candidate_environments_args["generate_how"] == "entropy_BM":
 
@@ -99,23 +103,21 @@ class EnvironmentDesign():
                                                    max_p = max_p,
                                                    region_of_interest=region_of_interest)
                 
-                print("Started computing Posterior.")
                 current_belief = pos_inference.calculate_posterior(episode=episode)
                 self.diagnostics["posterior_dist"].append(current_belief)
-                print("current_belief:", current_belief)
-                print("Finished computing Posterior.")
 
                 mean_params = pos_inference.mean(posterior_dist = current_belief)
                 self.diagnostics["parameter_means"].append(mean_params)
-                print("Mean Parameters:", mean_params)
+                if verbose:
+                    print("Mean Parameters:", mean_params)
 
                 region_of_interest = pos_inference.calculate_region_of_interest(log_likelihood = current_belief, confidence_interval=0.8)
                 self.diagnostics["region_of_interests"].append(region_of_interest)
-                print("Region of Interest:", region_of_interest)
 
                 _ROI_size = round(region_of_interest.size/current_belief.size, 2)
                 self.diagnostics["ROI_sizes"].append(_ROI_size)
-                print(f"Computed Region of Interest. Size = {_ROI_size}")
+                if verbose:
+                    print(f"Computed Region of Interest. Size = {_ROI_size}")
                 del _ROI_size
                 del current_belief
 
@@ -151,6 +153,7 @@ class EnvironmentDesign():
                                        gammas = np.linspace(min_gamma, max_gamma, num=15),
                                        probs= np.linspace(min_p, max_p, num=15),
                                        region_of_interest=region_of_interest,
+                                       verbose=verbose
                                        )
                 
                 #World to compute Behavior Map. TODO: this should take arbitrary arguments and not only gamma/p.
@@ -165,9 +168,7 @@ class EnvironmentDesign():
                                                       n_compute_BM = 5,
                                                       n_iterations_gradient=20,
                                                       stepsize_gradient=0.001)
-                
-                print("Learned Reward Function that maximizes Entropy. Reward function: ", updated_reward)
-                
+                                
                 #Generate an environment in which we observe the human with maximal information gain.
                 optimal_environment = deepcopy(self.base_environment)
                 optimal_environment.R_true = updated_reward
@@ -215,7 +216,8 @@ class EnvironmentDesign():
             self.all_observations.append(observation)
 
             del observation
-            print(f"Finished episode {episode}.")
+            if verbose:
+                print(f"Finished episode {episode}.")
 
 
 
@@ -424,6 +426,11 @@ class EnvironmentDesign():
                 trajectories = []
                 likelihoods = []
 
+                #Initialize Q and Value Functions and policy
+                Q = None
+                V = None
+                policy = None
+
                 for p, gamma, R in posterior_samples:
 
                     #if we dont want to learn some parameter, we overwrite the sample with the true value
@@ -437,7 +444,7 @@ class EnvironmentDesign():
                     # 4.1.1 Find the optimal policy for this env and posterior sample
                     T_agent = transition_matrix(candidate_env.N, candidate_env.M, p=p, absorbing_states=candidate_env.goal_states)
                     T_agent = insert_walls_into_T(T_agent, wall_indices=candidate_env.wall_states)
-                    policy = soft_q_iteration(R, T_agent, gamma=gamma, beta=1000)
+                    policy, Q, V = soft_q_iteration(R, T_agent, gamma=gamma, beta=beta_agent, return_what = "all", Q_init=Q, V_init=V, policy_init=policy)
                     policies.append(policy)
 
                     # 4.1.2 Generate $m$ trajectories from this policy
@@ -518,6 +525,10 @@ class EnvironmentDesign():
             for candidate_env in pbar:
                 regret = 0
 
+                #Initialize Q and Value Functions and policy
+                Q = None
+                V = None
+                policy = None
 
                 # calculate regret for one policy for each sample
                 for p_sample, gamma_sample, R_sample in posterior_samples:
@@ -533,7 +544,8 @@ class EnvironmentDesign():
                     #agents transition function according to p_sample
                     T_agent = transition_matrix(candidate_env.N, candidate_env.M, p=p_sample, absorbing_states=candidate_env.goal_states)
                     T_agent = insert_walls_into_T(T_agent, wall_indices=candidate_env.wall_states)
-                    V, _ = value_iteration_with_policy(candidate_env.R_true, T_agent, gamma_sample)
+                    # V, _ = value_iteration_with_policy(candidate_env.R_true, T_agent, gamma_sample)
+                    policy, Q, V = soft_q_iteration(candidate_env.R_true, T_agent, gamma=gamma_sample, beta=beta_agent, return_what = "all", Q_init=Q, V_init=V, policy_init=policy)
                     regret += V[0] / len(posterior_samples)
                     # print("regret: ", regret)
 
@@ -546,9 +558,10 @@ class EnvironmentDesign():
 
                 T_agent_mean = transition_matrix(candidate_env.N, candidate_env.M, p=p_sample_mean, absorbing_states=candidate_env.goal_states)
                 T_agent_mean = insert_walls_into_T(T_agent_mean, wall_indices=candidate_env.wall_states)
-                V_mean, _ = value_iteration_with_policy(
-                    candidate_env.R_true, T_agent_mean, gamma_sample_mean
-                )
+                # V_mean, _ = value_iteration_with_policy(
+                #     candidate_env.R_true, T_agent_mean, gamma_sample_mean
+                # )
+                V_mean = soft_q_iteration(candidate_env.R_true, T_agent_mean, gamma_sample_mean, beta=beta_agent, return_what="V")
 
                 regret -= V_mean[0]
                 candidate_env.regret = regret

@@ -105,11 +105,11 @@ def calculate_behavior_map(
         )
 
         experiment.mdp.solve(
-            save_heatmap=False,
-            show_heatmap=False,
-            heatmap_ax=None,
-            heatmap_mask=None,
-            label_precision=1,
+            # save_heatmap=False,
+            # show_heatmap=False,
+            # heatmap_ax=None,
+            # heatmap_mask=None,
+            # label_precision=1,
         )
 
 
