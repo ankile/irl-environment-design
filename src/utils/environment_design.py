@@ -417,6 +417,11 @@ class EnvironmentDesign():
                 trajectories = []
                 likelihoods = []
 
+                #Initialize Q and Value Functions and policy
+                Q = None
+                V = None
+                policy = None
+
                 for p, gamma, R in posterior_samples:
 
                     #if we dont want to learn some parameter, we overwrite the sample with the true value
@@ -430,7 +435,7 @@ class EnvironmentDesign():
                     # 4.1.1 Find the optimal policy for this env and posterior sample
                     T_agent = transition_matrix(candidate_env.N, candidate_env.M, p=p, absorbing_states=candidate_env.goal_states)
                     T_agent = insert_walls_into_T(T_agent, wall_indices=candidate_env.wall_states)
-                    policy = soft_q_iteration(R, T_agent, gamma=gamma, beta=beta_agent)
+                    policy, Q, V = soft_q_iteration(R, T_agent, gamma=gamma, beta=beta_agent, return_what = "all", Q_init=Q, V_init=V, policy_init=policy)
                     policies.append(policy)
 
                     # 4.1.2 Generate $m$ trajectories from this policy
@@ -511,6 +516,10 @@ class EnvironmentDesign():
             for candidate_env in pbar:
                 regret = 0
 
+                #Initialize Q and Value Functions and policy
+                Q = None
+                V = None
+                policy = None
 
                 # calculate regret for one policy for each sample
                 for p_sample, gamma_sample, R_sample in posterior_samples:
@@ -527,7 +536,7 @@ class EnvironmentDesign():
                     T_agent = transition_matrix(candidate_env.N, candidate_env.M, p=p_sample, absorbing_states=candidate_env.goal_states)
                     T_agent = insert_walls_into_T(T_agent, wall_indices=candidate_env.wall_states)
                     # V, _ = value_iteration_with_policy(candidate_env.R_true, T_agent, gamma_sample)
-                    V = soft_q_iteration(candidate_env.R_true, T_agent, gamma_sample, beta=beta_agent, return_what="V")
+                    policy, Q, V = soft_q_iteration(candidate_env.R_true, T_agent, gamma=gamma_sample, beta=beta_agent, return_what = "all", Q_init=Q, V_init=V, policy_init=policy)
                     regret += V[0] / len(posterior_samples)
                     # print("regret: ", regret)
 

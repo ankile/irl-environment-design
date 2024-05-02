@@ -104,8 +104,6 @@ class Experiment_2D:
         wall_states=[],
         action_success_prob=0.8,
         gamma=0.9,
-        reward_param_a=0.5,
-        reward_param_b=0.5
     ):
         # Assert valid parameters
         assert (
@@ -148,22 +146,6 @@ class Experiment_2D:
         T = transition_matrix(N=self.height, M=self.width, p=self.action_success_prob, absorbing_states=self.absorbing_states)
         T = insert_walls_into_T(T=T, wall_indices=self.wall_states)
 
-    
-
-        # #Define Reward Function
-        # def cobb_douglas(s, a, b, n_rows, n_cols):
-        #     '''
-        #     Models Cobb Douglas preferences
-        #     '''
-        #     row_state = s//n_rows
-        #     col_state = s%n_cols
-            
-        #     return (row_state+1)**a*(col_state+1)**b 
-
-        # R = np.zeros((h,w))
-        # R = R.flatten()
-        # R = [cobb_douglas(state, a=self.reward_param_a, b=self.reward_param_b, n_rows=h, n_cols=w) for state in np.arange(h*w)]
-        # R = np.array(R)
         
         R = self.rewards
 
@@ -178,8 +160,6 @@ class Experiment_2D:
         self,
         prob: float,
         gamma: float,
-        # reward_param_a: float,
-        # reward_param_b: float,
         params: dict,
         # transition_func: Callable[..., np.ndarray],
         use_pessimistic: bool = False,
@@ -188,8 +168,6 @@ class Experiment_2D:
 
         """
         self.gamma = gamma
-        # self.reward_param_a = reward_param_a
-        # self.reward_param_b = reward_param_b
 
         if not use_pessimistic:
             self.action_success_prob = prob

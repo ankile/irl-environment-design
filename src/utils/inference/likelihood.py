@@ -39,12 +39,17 @@ def expert_trajectory_log_likelihood(
     log_likelihood = 0.0
     # print("Parameter sample: ", parameter_sample)
 
+    #Initialize Q, V, policy
+    Q = None
+    V = None
+    policy = None
+
     for env, trajectories in expert_trajectories:
         assert env.goal_states is not None, "Add goal states to environment."
         T_agent = transition_matrix(env.N, env.M, p=parameter_sample.p, absorbing_states=env.goal_states)
         T_agent = insert_walls_into_T(T_agent, wall_indices=env.wall_states) #this is new
-        policy = soft_q_iteration(
-            env.R_true, T_agent, gamma=parameter_sample.gamma, beta=beta_agent
+        policy, Q, V = soft_q_iteration(
+            env.R_true, T_agent, gamma=parameter_sample.gamma, beta=beta_agent, return_what="all", Q_init=Q, V_init=V, policy_init=policy
         )
         for traj in trajectories:
             len_traj = len(traj)
