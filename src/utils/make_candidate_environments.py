@@ -53,7 +53,11 @@ class EntropyBM():
     - region_of_interest (list): The region of interest in the Behavior Map.
     '''
 
-    def __init__(self, parameter_estimates, gammas, probs, region_of_interest) -> None:
+    def __init__(self, parameter_estimates, 
+                 gammas, 
+                 probs, 
+                 region_of_interest,
+                 verbose) -> None:
 
         self.estimate_R = parameter_estimates.R
         self.estimate_gamma = parameter_estimates.gamma
@@ -62,6 +66,7 @@ class EntropyBM():
         self.gammas = gammas
         self.probs = probs
         self.region_of_interest = region_of_interest
+        self.verbose = verbose
 
 
     #TODO make this pretty, currently only works for 2-dim Behavior Map.
@@ -158,8 +163,7 @@ class EntropyBM():
 
                 if cover > max_ent_cover:
                     #Inhibit Behavior.
-                    R = R - stepsize * _masked_gradient_R
-                    
+                    R = R - stepsize * _masked_gradient_R  
 
                 else:
                     #Excite Behavior.
@@ -167,6 +171,7 @@ class EntropyBM():
 
         return R
     
+
     def BM_search(self, world, n_compute_BM: int, n_iterations_gradient: int = 20, stepsize_gradient: float = 0.01):
 
         '''
@@ -202,7 +207,8 @@ class EntropyBM():
 
             #Update Reward Function
             _world.rewards = R.detach().numpy()
-        print(f"Finished BM Search. Entropy: {_max_ent}.")
+        if self.verbose:
+            print(f"Finished BM Search. Entropy: {_max_ent}.")
 
         return max_ent_R
         

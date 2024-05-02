@@ -46,7 +46,8 @@ class EnvironmentDesign():
     def run_n_episodes(self,
                        n_episodes: int,
                        candidate_environments_args: dict,
-                       bayesian_regret_how = None,):
+                       bayesian_regret_how = None,
+                       verbose: bool=False):
         
         '''
         Run Environment Design for n_episodes episodes.
@@ -57,16 +58,19 @@ class EnvironmentDesign():
         - n_episodes: number of episodes to run environment design for.
         - bayesian_regret_how: how to evaluate the Bayesian Regret. Supported methods: ['value', 'likelihood'].
         - candidate_environments_args: dict for the respective candidate generation method.
+        - verbose: whether to print progress.
         '''
         
         self.episodes = n_episodes
         self.candidate_environments_args = candidate_environments_args
 
         #Observe human in base environment. Append observation to all observations.
-        print("Started episode 0.")
+        if verbose:
+            print("Started episode 0.")
         observation = self._observe_human(environment=self.base_environment, n_trajectories=1)
         self.all_observations.append(observation)
-        print("Finished episode 0.")
+        if verbose:
+            print("Finished episode 0.")
         self.diagnostics = {}
         self.diagnostics["parameter_means"] = []
         self.diagnostics["region_of_interests"] = []
@@ -78,7 +82,8 @@ class EnvironmentDesign():
 
         for episode in range(1,self.episodes):
         
-            print(f"Started episode {episode}.")
+            if verbose:
+                print(f"Started episode {episode}.")
 
             if candidate_environments_args["generate_how"] == "entropy_BM":
 
@@ -103,14 +108,16 @@ class EnvironmentDesign():
 
                 mean_params = pos_inference.mean(posterior_dist = current_belief)
                 self.diagnostics["parameter_means"].append(mean_params)
-                print("Mean Parameters:", mean_params)
+                if verbose:
+                    print("Mean Parameters:", mean_params)
 
                 region_of_interest = pos_inference.calculate_region_of_interest(log_likelihood = current_belief, confidence_interval=0.8)
                 self.diagnostics["region_of_interests"].append(region_of_interest)
 
                 _ROI_size = round(region_of_interest.size/current_belief.size, 2)
                 self.diagnostics["ROI_sizes"].append(_ROI_size)
-                print(f"Computed Region of Interest. Size = {_ROI_size}")
+                if verbose:
+                    print(f"Computed Region of Interest. Size = {_ROI_size}")
                 del _ROI_size
                 del current_belief
 
@@ -146,6 +153,7 @@ class EnvironmentDesign():
                                        gammas = np.linspace(min_gamma, max_gamma, num=15),
                                        probs= np.linspace(min_p, max_p, num=15),
                                        region_of_interest=region_of_interest,
+                                       verbose=verbose
                                        )
                 
                 #World to compute Behavior Map. TODO: this should take arbitrary arguments and not only gamma/p.
@@ -208,7 +216,8 @@ class EnvironmentDesign():
             self.all_observations.append(observation)
 
             del observation
-            print(f"Finished episode {episode}.")
+            if verbose:
+                print(f"Finished episode {episode}.")
 
 
 
