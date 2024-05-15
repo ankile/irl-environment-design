@@ -3,6 +3,7 @@ from typing import List
 import numpy as np
 import matplotlib.pyplot as plt
 from tqdm import tqdm
+import itertools
 
 from ..make_environment import Environment
 from ..constants import ParamTuple, StateTransition
@@ -23,24 +24,32 @@ class PosteriorInference():
 
     def __init__(self, 
                  expert_trajectories: List[tuple[Environment, List[StateTransition]]],
-                 resolution: int=15,
-                 min_gamma: float = 0.05,
-                 max_gamma: float = 0.95,
-                 min_p: float = 0.05,
-                 max_p: float = 0.95,
+                 parameter_ranges,
+                #  resolution: int=15,
+                 learn_what: list,
+                 custom_reward_function,
+                 custom_transition_function,
+                #  min_gamma: float = 0.05,
+                #  max_gamma: float = 0.95,
+                #  min_p: float = 0.05,
+                #  max_p: float = 0.95,
                  region_of_interest = None) -> None:
         
 
         self.expert_trajectories = expert_trajectories
-        self.resolution = resolution
-        self.min_gamma = min_gamma
-        self.max_gamma = max_gamma
-        self.min_p = min_p
-        self.max_p = max_p
+        # self.resolution = resolution
+        self.parameter_ranges = parameter_ranges
+        self.learn_what = learn_what
+        self.custom_reward_function = custom_reward_function
+        self.custom_transition_function = custom_transition_function
+        # self.min_gamma = min_gamma
+        # self.max_gamma = max_gamma
+        # self.min_p = min_p
+        # self.max_p = max_p
         self.region_of_interest = region_of_interest
 
-        self.gammas = np.linspace(self.min_gamma, self.max_gamma, self.resolution)
-        self.ps = np.linspace(self.min_p, self.max_p, self.resolution)
+        # self.gammas = np.linspace(self.min_gamma, self.max_gamma, self.resolution)
+        # self.ps = np.linspace(self.min_p, self.max_p, self.resolution)
 
 
     
@@ -71,7 +80,10 @@ class PosteriorInference():
 
         def _compute_likelihood_for_episode(episode):
                 #Arrays to loop over and store results.
-                log_likelihoods: np.ndarray = np.zeros(shape = (self.resolution, self.resolution))
+                # log_likelihoods: np.ndarray = np.zeros(shape = (self.resolution, self.resolution))
+                _n_user_params = len(self.parameter_ranges)
+                log_likelihoods: np.ndarray = np.zeros(shape = _n_user_params*[self.resolution])
+                del _n_user_params
 
 
                 #Observations up to current episode.
@@ -80,16 +92,18 @@ class PosteriorInference():
 
                 #Calculate log-likelihood for each (p, gamma) sample.
                 
-                for idx_p, p in tqdm(enumerate(self.ps)):
-                    for idx_gamma, gamma in tqdm(enumerate(self.gammas), leave=False):
+                # for idx_p, p in tqdm(enumerate(self.ps)):
+                #     for idx_gamma, gamma in tqdm(enumerate(self.gammas), leave=False):
 
-                        #If a ROI is given, only compute likelihoods for Region of Interest to save compute.
-                        if self.region_of_interest is not None:
-                            if ((idx_p*self.resolution)+(idx_gamma)) not in self.region_of_interest:
-                                log_likelihoods[idx_p, idx_gamma] = -np.inf
-                                continue
+                for parameter in itertools.product(*self.parameter_ranges):
 
-                        proposed_parameter = ParamTuple(p=p, gamma=gamma, R=None)
+                        # #If a ROI is given, only compute likelihoods for Region of Interest to save compute.
+                        # if self.region_of_interest is not None:
+                        #     if ((idx_p*self.resolution)+(idx_gamma)) not in self.region_of_interest:
+                        #         log_likelihoods[idx_p, idx_gamma] = -np.inf
+                        #         continue
+
+                        # proposed_parameter = ParamTuple(p=p, gamma=gamma, R=None)
 
                         likelihood = expert_trajectory_log_likelihood(
                             proposed_parameter, expert_trajectories

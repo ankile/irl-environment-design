@@ -27,18 +27,36 @@ class EnvironmentDesign():
     def __init__(self,
                  base_environment: Environment,
                  user_params: ParamTuple,
-                 learn_what: list):
-        
+                 learn_what: list,
+                 parameter_ranges: np.array,
+                 custom_reward_function = None,
+                 custom_transition_function = None,
+    ):
         '''
         
         Args:
+        - base_environment: Environment: the environment in which we observe the human.
+        - user_params: ParamTuple: the true, unknown parameters of the agent that we want to learn.
+        - parameter_ranges: np.array: the ranges of the parameters that we want to learn. E.g. parameter_ranges = np.array([[0.5, 0.95], [0.5, 0.95]]) means that we learn p and gamma in the range [0.5, 0.95].
+        - custom_reward_function, optional: custom reward function, if not given, use reward from function from base_environment
+        - custom_transition_function, optional: custom transition function, if not given, use transition function from base_environment
         - learn_what: list: which parameters we learn, e.g. learn_what = ['R', 'gamma'] means we learn R and gamma while the transition function is assumed to be known.
         '''
         
         self.base_environment = base_environment
         self.user_params = user_params
+        self.parameter_ranges = parameter_ranges
+        self.custom_reward_function = custom_reward_function
+        self.custom_transition_function = custom_transition_function
         self.all_observations = []
         self.learn_what = learn_what
+
+        #Check whether the parameters to learn are valid.
+        if "R" in learn_what:
+            assert custom_reward_function is not None, "You want to learn the reward function but did not provide a custom reward function."
+        if "T" in learn_what:
+            assert custom_transition_function is not None, "You want to learn the transition function but did not provide a custom transition function."
+
 
         self.candidate_env_generation_methods = ["random_walls", "hard_coded_envs"]
 
@@ -91,16 +109,20 @@ class EnvironmentDesign():
 
 
                 #TODO min/ max values need to be inferred from ROI. Are inferred but make this cleaner, e.g. "zoom in" on BM.
-                min_gamma = 0.5
-                max_gamma = 0.95
-                min_p = 0.5
-                max_p = 0.95
+                # min_gamma = 0.5
+                # max_gamma = 0.95
+                # min_p = 0.5
+                # max_p = 0.95
                 pos_inference = PosteriorInference(self.all_observations,
                                                    resolution=12,
-                                                   min_gamma = min_gamma,
-                                                   max_gamma = max_gamma,
-                                                   min_p = min_p,
-                                                   max_p = max_p,
+                                                   parameter_ranges=self.parameter_ranges,
+                                                    learn_what=self.learn_what,
+                                                    custom_reward_function=self.custom_reward_function,
+                                                    custom_transition_function=self.custom_transition_function,
+                                                #    min_gamma = min_gamma,
+                                                #    max_gamma = max_gamma,
+                                                #    min_p = min_p,
+                                                #    max_p = max_p,
                                                    region_of_interest=region_of_interest)
                 
                 current_belief = pos_inference.calculate_posterior(episode=episode)

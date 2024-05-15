@@ -143,6 +143,15 @@ def insert_random_walls_into_transition_matrix(
     return T, wall_states
 
 
+def make_environment_from_custom_functions(N,
+                                           M,
+                                           reward_function,
+                                           transition_function,
+                                           gamma,
+                                           parameters):
+    
+    
+
 class Environment:
     def __init__(
         self,

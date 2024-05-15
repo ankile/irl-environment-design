@@ -163,7 +163,8 @@ class EntropyBM():
 
                 if cover > max_ent_cover:
                     #Inhibit Behavior.
-                    R = R - stepsize * _masked_gradient_R  
+                    R = R - stepsize * _masked_gradient_R
+                    
 
                 else:
                     #Excite Behavior.
@@ -171,7 +172,7 @@ class EntropyBM():
 
         return R
     
-
+    
     def BM_search(self, world, n_compute_BM: int, n_iterations_gradient: int = 20, stepsize_gradient: float = 0.01):
 
         '''
