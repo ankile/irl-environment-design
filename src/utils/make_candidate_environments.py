@@ -53,18 +53,23 @@ class EntropyBM():
     - region_of_interest (list): The region of interest in the Behavior Map.
     '''
 
-    def __init__(self, parameter_estimates, 
-                 gammas, 
-                 probs, 
+    def __init__(self, 
+                 estimate_R,
+                 estimate_gamma,
+                 estimate_T, 
+                 paramters,
+                #  gammas, 
+                #  probs, 
                  region_of_interest,
                  verbose) -> None:
 
-        self.estimate_R = parameter_estimates.R
-        self.estimate_gamma = parameter_estimates.gamma
-        self.estimate_T = parameter_estimates.p
+        self.estimate_R = estimate_R
+        self.estimate_gamma = estimate_gamma
+        self.estimate_T = estimate_T
 
-        self.gammas = gammas
-        self.probs = probs
+        # self.gammas = gammas
+        # self.probs = probs
+        self.parameters = paramters
         self.region_of_interest = region_of_interest
         self.verbose = verbose
 
@@ -92,6 +97,8 @@ class EntropyBM():
 
         del _n_rows, _n_cols
 
+        return self.behavior_ROI
+
 
     def compute_covers(self, behavior_map):
 
@@ -107,7 +114,7 @@ class EntropyBM():
         '''
 
         #Compute Behavior Map restricted to Region of Interest.
-        self.compute_bm_ROI(behavior_map)
+        self.behavior_ROI = self.compute_bm_ROI(behavior_map)
 
         _behaviors = np.unique(self.behavior_ROI)
         n_behavior_samples = len(self.behavior_ROI)
@@ -187,7 +194,7 @@ class EntropyBM():
         _max_ent = -np.inf
         max_ent_R = self.estimate_R
 
-        for i in range(n_compute_BM):
+        for _ in range(n_compute_BM):
 
 
             # Compute Behavior Map

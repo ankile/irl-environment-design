@@ -29,6 +29,8 @@ class EnvironmentDesign():
                  user_params: ParamTuple,
                  learn_what: list,
                  parameter_ranges: np.array,
+                 resolution: int,
+                 indexes_custom_funs: dict,
                  custom_reward_function = None,
                  custom_transition_function = None,
     ):
@@ -37,7 +39,8 @@ class EnvironmentDesign():
         Args:
         - base_environment: Environment: the environment in which we observe the human.
         - user_params: ParamTuple: the true, unknown parameters of the agent that we want to learn.
-        - parameter_ranges: np.array: the ranges of the parameters that we want to learn. E.g. parameter_ranges = np.array([[0.5, 0.95], [0.5, 0.95]]) means that we learn p and gamma in the range [0.5, 0.95].
+        - parameter_ranges: np.array: the ranges of the parameters that we want to learn. E.g. parameter_ranges = np.array([[0.5, 0.95], [0.5, 0.95]]) means that we learn two parameters in the range [0.5, 0.95].
+        - resolution: int: the resolution of the grid on which we learn the parameters.
         - custom_reward_function, optional: custom reward function, if not given, use reward from function from base_environment
         - custom_transition_function, optional: custom transition function, if not given, use transition function from base_environment
         - learn_what: list: which parameters we learn, e.g. learn_what = ['R', 'gamma'] means we learn R and gamma while the transition function is assumed to be known.
@@ -46,8 +49,10 @@ class EnvironmentDesign():
         self.base_environment = base_environment
         self.user_params = user_params
         self.parameter_ranges = parameter_ranges
+        self.resolution = resolution
         self.custom_reward_function = custom_reward_function
         self.custom_transition_function = custom_transition_function
+        self.indexes_custom_funs = indexes_custom_funs
         self.all_observations = []
         self.learn_what = learn_what
 
@@ -57,8 +62,10 @@ class EnvironmentDesign():
         if "T" in learn_what:
             assert custom_transition_function is not None, "You want to learn the transition function but did not provide a custom transition function."
 
+        self.parameter_ranges_array = [np.linspace(parameter_ranges[i][0], parameter_ranges[i][1], resolution) for i in range(len(parameter_ranges))]
 
-        self.candidate_env_generation_methods = ["random_walls", "hard_coded_envs"]
+
+        self.candidate_env_generation_methods = ["random_walls", "hard_coded_envs", "Naive_BM", "entropy_BM"]
 
     
     def run_n_episodes(self,
@@ -114,11 +121,12 @@ class EnvironmentDesign():
                 # min_p = 0.5
                 # max_p = 0.95
                 pos_inference = PosteriorInference(self.all_observations,
-                                                   resolution=12,
-                                                   parameter_ranges=self.parameter_ranges,
-                                                    learn_what=self.learn_what,
-                                                    custom_reward_function=self.custom_reward_function,
-                                                    custom_transition_function=self.custom_transition_function,
+                                                #    resolution=12,
+                                                   parameter_ranges=self.parameter_ranges_array,
+                                                   learn_what=self.learn_what,
+                                                   custom_reward_function=self.custom_reward_function,
+                                                   custom_transition_function=self.custom_transition_function,
+                                                   indexes_custom_funs=self.indexes_custom_funs,
                                                 #    min_gamma = min_gamma,
                                                 #    max_gamma = max_gamma,
                                                 #    min_p = min_p,
@@ -147,33 +155,39 @@ class EnvironmentDesign():
 
                 #TODO here we need to have a cleaner way to convert the parametrization into the actual function.
                 if "R" in self.learn_what:
-                    R_estimate = mean_params.R
+                    # estimate_R = mean_params.R
+                    estimate_R = self.custom_reward_function(**mean_params[self.indexes_custom_funs["reward_function"]])
                 else:
-                    R_estimate = self.user_params.R
+                    estimate_R = self.user_params.R
 
 
                 if "gamma" in self.learn_what:
-                    gamma_estimate = mean_params.gamma
+                    # estimate_gamma = mean_params.gamma
+                    estimate_gamma = mean_params[self.indexes_custom_funs["gamma"]]
                 else:
-                    gamma_estimate = self.user_params.gamma
+                    estimate_gamma = self.user_params.gamma
 
 
                 if "T" in self.learn_what:
-                    T_estimate = transition_matrix(self.base_environment.N, self.base_environment.M, p=mean_params.p, absorbing_states=self.base_environment.goal_states)
-                    T_estimate = insert_walls_into_T(T=T_estimate, wall_indices=self.base_environment.wall_states)
+                    # T_estimate = transition_matrix(self.base_environment.N, self.base_environment.M, p=mean_params.p, absorbing_states=self.base_environment.goal_states)
+                    # T_estimate = insert_walls_into_T(T=T_estimate, wall_indices=self.base_environment.wall_states)
+                    estimate_T = self.custom_transition_function(**mean_params[self.indexes_custom_funs["transition_function"]])
                 else:
-                    T_estimate = self.base_environment.T_true
+                    estimate_T = self.base_environment.T_true
                 del mean_params
 
 
 
-                param_estimates = ParamTuple(p = T_estimate, gamma=gamma_estimate, R = R_estimate)
+                # param_estimates = ParamTuple(p = T_estimate, gamma=gamma_estimate, R = R_estimate)
 
 
                 #Initialize EntropyBM object.
-                entropy_bm = EntropyBM(parameter_estimates=param_estimates,
-                                       gammas = np.linspace(min_gamma, max_gamma, num=15),
-                                       probs= np.linspace(min_p, max_p, num=15),
+                entropy_bm = EntropyBM(estimate_R,
+                                       estimate_T,
+                                       estimate_gamma,
+                                        self.parameter_ranges_array,
+                                    #    gammas = np.linspace(min_gamma, max_gamma, num=15),
+                                    #    probs= np.linspace(min_p, max_p, num=15),
                                        region_of_interest=region_of_interest,
                                        verbose=verbose
                                        )

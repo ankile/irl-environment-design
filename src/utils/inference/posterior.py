@@ -12,7 +12,7 @@ from ..inference.likelihood import expert_trajectory_log_likelihood
 
 
 
-class PosteriorInference():
+class   PosteriorInference():
 
 
     '''
@@ -83,7 +83,7 @@ class PosteriorInference():
         def _compute_likelihood_for_episode(episode):
                 #Arrays to loop over and store results.
                 # log_likelihoods: np.ndarray = np.zeros(shape = (self.resolution, self.resolution))
-                _n_user_params = len(self.parameter_ranges)
+                _n_user_params = self.parameter_ranges.ndim
                 log_likelihoods: np.ndarray = np.zeros(shape = self.resolution**_n_user_params)
 
 
@@ -123,6 +123,7 @@ class PosteriorInference():
 
                 log_likelihoods = log_likelihoods.reshape(shape = _n_user_params*[self.resolution]) #TODO, is this reshaping correct?
                 del _n_user_params
+                del _transition_func, _reward_func
 
 
                 return log_likelihoods
@@ -303,14 +304,19 @@ class PosteriorInference():
 
             posterior_probabilities = np.exp(posterior_dist)
 
-        total_probability = np.sum(posterior_probabilities, axis=(0,1))
+        total_probability = np.sum(posterior_probabilities, axis=tuple(range(posterior_probabilities.ndim)))
         
         #Calculate mean.
-        mean_p = np.sum(self.ps * np.sum(posterior_probabilities, axis=1))/total_probability
-        mean_gamma = np.sum(self.gammas * np.sum(posterior_probabilities, axis=0))/total_probability
+        _means = []
+        for i in range(posterior_probabilities.ndim):
+            _indexes_to_sum = [j for j in range(posterior_probabilities.ndim) if j != i]
+            _probs = np.sum(posterior_probabilities, axis=tuple(_indexes_to_sum))
+            _means.append(np.sum(self.parameter_ranges[i]*_probs)/total_probability)
+        # mean_p = np.sum(self.ps * np.sum(posterior_probabilities, axis=1))/total_probability
+        # mean_gamma = np.sum(self.gammas * np.sum(posterior_probabilities, axis=0))/total_probability
 
-
-        return ParamTuple(p=mean_p, gamma=mean_gamma, R=None)
+        return _means
+        # return ParamTuple(p=mean_p, gamma=mean_gamma, R=None)
     
 
     def MAP(self,
