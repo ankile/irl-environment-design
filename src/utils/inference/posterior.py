@@ -29,6 +29,7 @@ class PosteriorInference():
                  learn_what: list,
                  custom_reward_function,
                  custom_transition_function,
+                 indexes_custom_funs,
                 #  min_gamma: float = 0.05,
                 #  max_gamma: float = 0.95,
                 #  min_p: float = 0.05,
@@ -42,6 +43,7 @@ class PosteriorInference():
         self.learn_what = learn_what
         self.custom_reward_function = custom_reward_function
         self.custom_transition_function = custom_transition_function
+        self.indexes_custom_funs = indexes_custom_funs
         # self.min_gamma = min_gamma
         # self.max_gamma = max_gamma
         # self.min_p = min_p
@@ -82,8 +84,7 @@ class PosteriorInference():
                 #Arrays to loop over and store results.
                 # log_likelihoods: np.ndarray = np.zeros(shape = (self.resolution, self.resolution))
                 _n_user_params = len(self.parameter_ranges)
-                log_likelihoods: np.ndarray = np.zeros(shape = _n_user_params*[self.resolution])
-                del _n_user_params
+                log_likelihoods: np.ndarray = np.zeros(shape = self.resolution**_n_user_params)
 
 
                 #Observations up to current episode.
@@ -95,7 +96,7 @@ class PosteriorInference():
                 # for idx_p, p in tqdm(enumerate(self.ps)):
                 #     for idx_gamma, gamma in tqdm(enumerate(self.gammas), leave=False):
 
-                for parameter in itertools.product(*self.parameter_ranges):
+                for idx_parameter, parameter in enumerate(itertools.product(*self.parameter_ranges)):
 
                         # #If a ROI is given, only compute likelihoods for Region of Interest to save compute.
                         # if self.region_of_interest is not None:
@@ -103,12 +104,26 @@ class PosteriorInference():
                         #         log_likelihoods[idx_p, idx_gamma] = -np.inf
                         #         continue
 
-                        # proposed_parameter = ParamTuple(p=p, gamma=gamma, R=None)
 
+                        #Generate custom reward and transition functions according to current sample.
+                        _transition_func = self.custom_transition_function(*parameter[self.indexes_custom_funs["transition_function"]])
+                        _reward_func = self.custom_reward_function(*parameter[self.indexes_custom_funs["reward_function"]])
+                        gamma = parameter[self.indexes_custom_funs["gamma"]]
+
+
+                        #Calculate log-likelihood.
                         likelihood = expert_trajectory_log_likelihood(
-                            proposed_parameter, expert_trajectories
+                            _transition_func,
+                            _reward_func,
+                            gamma,
+                            expert_trajectories
                         )
-                        log_likelihoods[idx_p, idx_gamma] = likelihood
+
+                        log_likelihoods[idx_parameter] = likelihood
+
+                log_likelihoods = log_likelihoods.reshape(shape = _n_user_params*[self.resolution]) #TODO, is this reshaping correct?
+                del _n_user_params
+
 
                 return log_likelihoods
 

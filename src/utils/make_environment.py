@@ -145,11 +145,23 @@ def insert_random_walls_into_transition_matrix(
 
 def make_environment_from_custom_functions(N,
                                            M,
+                                           goal_states,
                                            reward_function,
                                            transition_function,
                                            gamma,
-                                           parameters):
+                                           transition_parameters,
+                                           reward_parameters
+                                           ):
     
+    #get parameters
+
+    # Create the environment
+    return Environment(
+        N = N,
+        M = M,
+        T_true = transition_function(**transition_parameters),
+        goal_states = goal_states
+    )
     
 
 class Environment:
@@ -158,8 +170,8 @@ class Environment:
         N,
         M,
         T_true,
-        wall_states,
         goal_states,
+        wall_states=None,
         R_sample_mean=None,
         start_state=0,
         n_walls=0,
