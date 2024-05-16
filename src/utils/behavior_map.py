@@ -13,66 +13,65 @@ from matplotlib import pyplot as plt
 from tqdm import tqdm
 from src.utils.multithreading import OptionalPool
 
-from src.utils.policy import follow_policy, get_all_absorbing_states, param_generator
+from src.utils.policy import follow_policy, param_generator
 from src.visualization.strategy import make_general_strategy_heatmap
 from src.worlds.mdp2d import Experiment_2D
 import src.worlds.mdp2d as mdp2d
+from src.utils.optimization import soft_q_iteration
+from src.utils.constants import beta_agent
 
 
 ExperimentResult = namedtuple("ExperimentResult", ["data", "p2idx", "pidx2states"])
 
 
 
-def plot_bmap(
-    world: mdp2d.Experiment_2D,
-    # gammas: np.ndarray,
-    # probs: np.ndarray,
-    parameters: np.ndarray,
-    # start_state=0,
-    custom_reward_function,
-    custom_transition_function
-    # ax=None,
-    # plot:bool = False
-):
-    result = calculate_behavior_map(
-        experiment=world,
-        params=world.params,
-        # gammas=gammas,
-        # probs=probs,
-        paramterers=parameters,
-        # start_state=start_state,
-    )
+# def plot_bmap(
+#     world: mdp2d.Experiment_2D,
+#     parameter_mesh,
+#     shaped_parameter_mesh,
+#     # gammas: np.ndarray,
+#     # probs: np.ndarray,
+#     # start_state=0,
+#     # ax=None,
+#     # plot:bool = False
+# ):
+#     result = calculate_behavior_map(
+#         experiment=world,
+#         params=world.params,
+#         # gammas=gammas,
+#         # probs=probs,
+#         paramterers=parameters,
+#         # start_state=start_state,
+#     )
 
-    # data = result.data
+#     # data = result.data
 
-    # if plot:
+#     # if plot:
 
-    #     if ax is None:
-    #         _, ax = plt.subplots(figsize=(4, 4))
+#     #     if ax is None:
+#     #         _, ax = plt.subplots(figsize=(4, 4))
 
-    #     make_general_strategy_heatmap(
-    #         results=data,
-    #         probs=probs,
-    #         p2idx=None,
-    #         title=f"",
-    #         ax=ax,
-    #         gammas=gammas,
-    #         annot=False,
-    #         ax_labels=False,
-    #         num_ticks=5,
-    #         legend=False
-    #     )
-    return result
+#     #     make_general_strategy_heatmap(
+#     #         results=data,
+#     #         probs=probs,
+#     #         p2idx=None,
+#     #         title=f"",
+#     #         ax=ax,
+#     #         gammas=gammas,
+#     #         annot=False,
+#     #         ax_labels=False,
+#     #         num_ticks=5,
+#     #         legend=False
+#     #     )
+#     return result
 
 
 def calculate_behavior_map(
-    experiment: Experiment_2D,
-    paramterers: np.ndarray,
-    custom_reward_function,
-    custom_transition_function,
+    environment: mdp2d.Experiment_2D,
+    parameter_mesh,
+    shaped_parameter_mesh,
     # gammas: np.ndarray,
     # probs: np.ndarray,
-    start_state: int,
 ) -> ExperimentResult:
     """
     Run an experiment with a given set of parameters and return the results.
@@ -84,7 +83,7 @@ def calculate_behavior_map(
     """
 
     # data = np.zeros((len(probs), len(gammas)), dtype=np.int32)
-    data: np.ndarray = np.zeros_like(paramterers, dtype=np.int32)
+    data: np.ndarray = np.zeros_like(shaped_parameter_mesh.flatten(), dtype=np.int32)
     p2idx: Dict[str, int] = {}
     pidx2states: Dict[list, int] = {}
 
@@ -92,9 +91,14 @@ def calculate_behavior_map(
     #Index for current policy, increased by 1 for each new policy.
     idx_policy = 0
 
+    #Initialize policy, V, Q
+    policy = None
+    V = None
+    Q = None
+
 
     # for (i, prob), (j, gamma) in itertools.product(enumerate(probs), enumerate(gammas)):
-    for idx_parameter, parameter in enumerate(itertools.product(paramterers)):
+    for idx_parameter, parameter in enumerate(parameter_mesh):
 
         # experiment.set_user_params(
         #     prob=prob,
@@ -103,21 +107,29 @@ def calculate_behavior_map(
         # )
         # self.R = custom_reward_function(**parameter)[]
 
-        experiment.mdp.solve(
+        # experiment.mdp.solve(
             # save_heatmap=False,
             # show_heatmap=False,
             # heatmap_ax=None,
             # heatmap_mask=None,
             # label_precision=1,
+        # )
+
+        _transition_func = environment.transition_function(*parameter.T)
+        _reward_func = environment.reward_function(*parameter.R)
+        _gamma = parameter.gamma
+
+        policy, Q, V = soft_q_iteration(
+            _reward_func, _transition_func, gamma=_gamma, beta=beta_agent, return_what="all", Q_init=Q, V_init=V, policy_init=policy
         )
 
 
         policy_str, policy_states = follow_policy(
-            experiment.mdp.policy,
-            height=experiment.height,
-            width=experiment.width,
-            initial_state=start_state,
-            goal_states=experiment.absorbing_states,
+            policy,
+            height=environment.N,
+            width=environment.M,
+            initial_state=environment.start_state,
+            goal_states=environment.absorbing_states,
         )
 
         equivalent_policy_exists: bool = False
@@ -161,10 +173,10 @@ def calculate_behavior_map(
 
         #Update which policy sample (i,j) used.
         if equivalent_policy_exists:
-            data[i, j] = equivalent_policy_rollout_idx
+            data[idx_parameter] = equivalent_policy_rollout_idx
 
         else:
-            data[i, j] = p2idx[policy_str]
+            data[idx_parameter] = p2idx[policy_str]
 
 
 

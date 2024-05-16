@@ -95,11 +95,11 @@ class   PosteriorInference():
 
                 for idx_parameter, parameter in enumerate(self.parameter_mesh):
 
-                        # #If a ROI is given, only compute likelihoods for Region of Interest to save compute.
-                        # if self.region_of_interest is not None:
-                        #     if ((idx_p*self.resolution)+(idx_gamma)) not in self.region_of_interest:
-                        #         log_likelihoods[idx_p, idx_gamma] = -np.inf
-                        #         continue
+                        #If a ROI is given, only compute likelihoods within Region of Interest to save compute.
+                        if self.region_of_interest is not None:
+                            if idx_parameter not in self.region_of_interest:
+                                log_likelihoods[log_likelihoods] = -np.inf
+                                continue
 
                         #Insert parameter values into custom functions.
                         _transition_func = self.base_environment.transition_function(*parameter.T)

@@ -57,7 +57,8 @@ class EntropyBM():
                  estimate_R,
                  estimate_gamma,
                  estimate_T, 
-                 paramters,
+                 named_parameter_mesh,
+                 shaped_parameter_mesh,
                 #  gammas, 
                 #  probs, 
                  region_of_interest,
@@ -69,12 +70,14 @@ class EntropyBM():
 
         # self.gammas = gammas
         # self.probs = probs
-        self.parameters = paramters
+        self.named_parameter_mesh = named_parameter_mesh
+        self.shaped_parameter_mesh = shaped_parameter_mesh
         self.region_of_interest = region_of_interest
         self.verbose = verbose
 
 
     #TODO make this pretty, currently only works for 2-dim Behavior Map.
+    #TODO make this vectorized for prettiness 
     def compute_bm_ROI(self, behavior_map):
 
         '''
@@ -86,16 +89,12 @@ class EntropyBM():
         Returns:
         - behavior_ROI (list): The Behavior Map restricted to the Region of Interest.
         '''
-        _n_rows = behavior_map.data.shape[0]
-        _n_cols = behavior_map.data.shape[1]
+        behavior_map_flat = behavior_map.data.flatten()
 
         self.behavior_ROI = []
-        for i in range(_n_rows):
-            for j in range(_n_cols):
-                if (i*_n_rows + j) in self.region_of_interest:
-                    self.behavior_ROI.append(behavior_map.data[i,j])
-
-        del _n_rows, _n_cols
+        for idx in range(len(behavior_map_flat)):
+            if idx in self.region_of_interest:
+                self.behavior_ROI.append(behavior_map_flat[idx])
 
         return self.behavior_ROI
 
@@ -180,7 +179,7 @@ class EntropyBM():
         return R
     
     
-    def BM_search(self, world, n_compute_BM: int, n_iterations_gradient: int = 20, stepsize_gradient: float = 0.01):
+    def BM_search(self, environment, named_parameter_mesh, shaped_parameter_mesh, n_compute_BM: int, n_iterations_gradient: int = 20, stepsize_gradient: float = 0.01):
 
         '''
         Find a reward function that maximizes the entropy of the Behavior Map.
@@ -189,7 +188,7 @@ class EntropyBM():
         TODO    
         '''
 
-        _world = deepcopy(world)
+        _environment = deepcopy(environment)
         R = self.estimate_R
         _max_ent = -np.inf
         max_ent_R = self.estimate_R
@@ -199,7 +198,9 @@ class EntropyBM():
 
             # Compute Behavior Map
             # bm_out = bm.plot_bmap(world=_world, gammas=self.gammas, probs=self.probs)
-            bm_out = bm.plot_bmap(world=_world, )
+            bm_out = bm.calculate_behavior_map(world=_environment, 
+                                               parameter_mesh=named_parameter_mesh,
+                                               shaped_parameter_mesh=shaped_parameter_mesh)
 
 
             #Compute entropy of BM

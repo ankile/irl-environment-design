@@ -86,28 +86,28 @@ class EnvironmentDesign():
 
 
         #Generate mesh of parameters that we learn to later calculate Behavior Map and likelihood. #TODO should this be a list or an ndarray
-        n_params_R = parameter_ranges_R.shape[0] if "R" in learn_what else 0
-        n_params_gamma = parameter_ranges_gamma.shape[0] if "gamma" in learn_what else 0
-        n_params_T = parameter_ranges_T.shape[0] if "T" in learn_what else 0
+        self.n_params_R = parameter_ranges_R.shape[0] if "R" in learn_what else 0
+        self.n_params_gamma = parameter_ranges_gamma.shape[0] if "gamma" in learn_what else 0
+        self.n_params_T = parameter_ranges_T.shape[0] if "T" in learn_what else 0
 
 
         self._named_parameter_mesh = []
         for _, parameter in enumerate(itertools.product(*self.all_parameter_ranges)):
 
             if "R" in learn_what:
-                R = parameter[:n_params_R]
+                R = parameter[:self.n_params_R]
             else:
                 R = user_params.R
             
             if ("gamma" in learn_what) and ("R" in learn_what):
-                gamma = parameter[n_params_R:n_params_R+n_params_gamma]
+                gamma = parameter[self.n_params_R:self.n_params_R+self.n_params_gamma]
             elif "gamma" in learn_what:
-                gamma = parameter[:n_params_gamma]
+                gamma = parameter[:self.n_params_gamma]
             else:
                 gamma = user_params.gamma
 
             if "T" in learn_what:
-                T = parameter[-n_params_T:]
+                T = parameter[-self.n_params_T:]
             else:
                 T = user_params.T
             self._named_parameter_mesh.append(GenParamTuple(R=R, gamma=gamma, T=T))
@@ -211,40 +211,37 @@ class EnvironmentDesign():
                 del current_belief
 
 
-
+                #Get mean reward, transition, gamma according to current belief for implicit differentiation.
                 #TODO here we need to have a cleaner way to convert the parametrization into the actual function.
                 if "R" in self.learn_what:
-                    # estimate_R = mean_params.R
-                    estimate_R = self.custom_reward_function(**mean_params[self.indexes_custom_funs["reward_function"]])
+                    estimate_R = self.base_environment.reward_function(*mean_params[:self.n_params_R])
                 else:
                     estimate_R = self.user_params.R
 
 
-                if "gamma" in self.learn_what:
-                    # estimate_gamma = mean_params.gamma
-                    estimate_gamma = mean_params[self.indexes_custom_funs["gamma"]]
+                if ("gamma" in self.learn_what) and ("R" in self.learn_what):
+                    estimate_gamma = mean_params[self.n_params_R:self.n_params_R+self.n_params_gamma]
+                elif "gamma" in self.learn_what:
+                    estimate_gamma = mean_params[:self.n_params_gamma]
                 else:
                     estimate_gamma = self.user_params.gamma
 
 
                 if "T" in self.learn_what:
-                    # T_estimate = transition_matrix(self.base_environment.N, self.base_environment.M, p=mean_params.p, absorbing_states=self.base_environment.goal_states)
-                    # T_estimate = insert_walls_into_T(T=T_estimate, wall_indices=self.base_environment.wall_states)
-                    estimate_T = self.custom_transition_function(**mean_params[self.indexes_custom_funs["transition_function"]])
+                    estimate_T = self.base_environment.transition_function(*mean_params[:-self.n_params_T])
                 else:
-                    estimate_T = self.base_environment.T_true
+                    estimate_T = self.user_params.T
                 del mean_params
 
 
-
-                # param_estimates = ParamTuple(p = T_estimate, gamma=gamma_estimate, R = R_estimate)
 
 
                 #Initialize EntropyBM object.
                 entropy_bm = EntropyBM(estimate_R,
                                        estimate_T,
                                        estimate_gamma,
-                                        self.parameter_ranges_array,
+                                       self._named_parameter_mesh,
+                                       self.shaped_parameter_mesh,
                                     #    gammas = np.linspace(min_gamma, max_gamma, num=15),
                                     #    probs= np.linspace(min_p, max_p, num=15),
                                        region_of_interest=region_of_interest,
