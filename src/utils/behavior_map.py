@@ -72,7 +72,7 @@ def calculate_behavior_map(
     custom_transition_function,
     # gammas: np.ndarray,
     # probs: np.ndarray,
-    # start_state: int,
+    start_state: int,
 ) -> ExperimentResult:
     """
     Run an experiment with a given set of parameters and return the results.
@@ -101,7 +101,7 @@ def calculate_behavior_map(
         #     gamma=gamma,
         #     use_pessimistic=False,
         # )
-        self.R = custom_reward_function(**parameter)[]
+        # self.R = custom_reward_function(**parameter)[]
 
         experiment.mdp.solve(
             # save_heatmap=False,

@@ -27,6 +27,7 @@ class   PosteriorInference():
                  expert_trajectories: List[tuple[Environment, List[StateTransition]]],
                  learn_what: list,
                  parameter_mesh: list,
+                 parameter_mesh_shape: np.ndarray,
                  region_of_interest = None) -> None:
         
 
@@ -35,6 +36,7 @@ class   PosteriorInference():
         # self.resolution = resolution
         self.learn_what = learn_what
         self.parameter_mesh = parameter_mesh
+        self.parameter_mesh_shape = parameter_mesh_shape
         # self.min_gamma = min_gamma
         # self.max_gamma = max_gamma
         # self.min_p = min_p
@@ -112,7 +114,8 @@ class   PosteriorInference():
 
                         log_likelihoods[idx_parameter] = likelihood
 
-                log_likelihoods = log_likelihoods.reshape(shape = _n_user_params*[self.resolution]) #TODO, is this reshaping correct?
+                log_likelihoods = log_likelihoods.reshape(shape = self.parameter_mesh_shape.shape) #TODO, is this reshaping correct?
+                
                 # del _n_user_params
                 del _transition_func, _reward_func, _gamma
 

@@ -139,7 +139,11 @@ class EnvironmentDesign():
             shape_mesh.append([parameter_ranges_gamma.shape[1]]*parameter_ranges_gamma.shape[0])
         if "T" in learn_what:
             shape_mesh.append([parameter_ranges_T.shape[1]]*parameter_ranges_T.shape[0])
-        self.shaped_parameter_mesh = np.empty(shape=(shape_mesh))
+
+        shape_mesh = list(itertools.chain(*shape_mesh)) #flatten list
+        self.shaped_parameter_mesh = np.empty(shape=tuple(shape_mesh))
+
+        print("Generated parameter mesh of shape: ", self.shaped_parameter_mesh.shape)
 
 
         #Supported environment design methods.
@@ -202,6 +206,7 @@ class EnvironmentDesign():
                                                    expert_trajectories=self.all_observations,
                                                    learn_what=self.learn_what,
                                                    parameter_mesh=self._named_parameter_mesh,
+                                                   parameter_mesh_shape = self.shaped_parameter_mesh,
                                                    region_of_interest=region_of_interest)
                 
                 current_belief = pos_inference.calculate_posterior(episode=episode)
@@ -441,26 +446,22 @@ class EnvironmentDesign():
 
         Returns:
         - tuple of (Environment, trajectories)
-        '''
-        assert environment.reward_function is np.ndarray, f"Provide a reward function for the environment of type np.ndarray. You provided: {type(environment.reward_function)}."
-        assert environment.transition_function is np.ndarray, f"Provide a transition function for the environment of type np.ndarray. You provided: {type(environment.transition_function)}"
-        
+        '''         
 
         #Calculate policy of agent in environment.
         # T_agent = transition_matrix(environment.N, environment.M, p=self.user_params.p, absorbing_states=environment.goal_states)
         # T_agent = insert_walls_into_T(T=T_agent, wall_indices=environment.wall_states)
-        agent_policy = soft_q_iteration(environment.reward_function, environment.transition_function, gamma=self.user_params.gamma, beta=beta_agent)
+        agent_policy = soft_q_iteration(self.user_params.R, self.user_params.T, gamma=self.user_params.gamma, beta=beta_agent)
 
         # Generate trajectories.
         trajectories = generate_n_trajectories(
-            environment.T_true,
+            self.user_params.T,
             agent_policy,
             environment.goal_states,
             n_trajectories=n_trajectories,
         )
 
         del agent_policy
-        del T_agent
 
         return (environment, trajectories)
 
