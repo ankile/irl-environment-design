@@ -237,26 +237,28 @@ class EnvironmentDesign():
 
 
                 #Initialize EntropyBM object.
-                entropy_bm = EntropyBM(estimate_R,
-                                       estimate_T,
-                                       estimate_gamma,
-                                       self._named_parameter_mesh,
-                                       self.shaped_parameter_mesh,
+                entropy_bm = EntropyBM(estimate_R = estimate_R,
+                                       estimate_T = estimate_T,
+                                       estimate_gamma = estimate_gamma,
+                                       named_parameter_mesh=self._named_parameter_mesh,
+                                       shaped_parameter_mesh=self.shaped_parameter_mesh,
                                     #    gammas = np.linspace(min_gamma, max_gamma, num=15),
                                     #    probs= np.linspace(min_p, max_p, num=15),
                                        region_of_interest=region_of_interest,
                                        verbose=verbose
                                        )
                 
-                #World to compute Behavior Map. TODO: this should take arbitrary arguments and not only gamma/p.
-                _world = Experiment_2D(self.base_environment.N,
-                                       self.base_environment.M,
-                                       rewards=estimate_R,
-                                       absorbing_states=self.base_environment.goal_states,
-                                       wall_states=self.base_environment.wall_states)
+                # #World to compute Behavior Map. TODO: this should take arbitrary arguments and not only gamma/p.
+                # _world = Experiment_2D(self.base_environment.N,
+                #                        self.base_environment.M,
+                #                        rewards=estimate_R,
+                #                        absorbing_states=self.base_environment.goal_states,
+                #                        wall_states=self.base_environment.wall_states)
 
                 #Find a reward function that maximizes the entropy of the Behavior Map. TODO: also use transition function. Currently only do gradient updates on R.
-                updated_reward = entropy_bm.BM_search(world = _world,
+                updated_reward = entropy_bm.BM_search(base_environment = self.base_environment,
+                                                      named_parameter_mesh=self._named_parameter_mesh,
+                                                      shaped_parameter_mesh=self.shaped_parameter_mesh,
                                                       n_compute_BM = 5,
                                                       n_iterations_gradient=20,
                                                       stepsize_gradient=0.001)

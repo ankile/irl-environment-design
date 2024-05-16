@@ -66,6 +66,7 @@ ExperimentResult = namedtuple("ExperimentResult", ["data", "p2idx", "pidx2states
 #     return result
 
 
+#TODO, only compute over Region of Interest.
 def calculate_behavior_map(
     environment: mdp2d.Experiment_2D,
     parameter_mesh,
@@ -108,11 +109,11 @@ def calculate_behavior_map(
         # self.R = custom_reward_function(**parameter)[]
 
         # experiment.mdp.solve(
-            # save_heatmap=False,
-            # show_heatmap=False,
-            # heatmap_ax=None,
-            # heatmap_mask=None,
-            # label_precision=1,
+        #     save_heatmap=False,
+        #     show_heatmap=False,
+        #     heatmap_ax=None,
+        #     heatmap_mask=None,
+        #     label_precision=1,
         # )
 
         _transition_func = environment.transition_function(*parameter.T)
@@ -123,13 +124,17 @@ def calculate_behavior_map(
             _reward_func, _transition_func, gamma=_gamma, beta=beta_agent, return_what="all", Q_init=Q, V_init=V, policy_init=policy
         )
 
+        #Convert stochastic Boltzmann policy into determinstic, greedy policy for rollouts.
+        greedy_policy = np.argmax(policy, axis=1)
+        greedy_policy = np.reshape(greedy_policy,  newshape=(environment.N, environment.M))
+
 
         policy_str, policy_states = follow_policy(
-            policy,
+            greedy_policy,
             height=environment.N,
             width=environment.M,
             initial_state=environment.start_state,
-            goal_states=environment.absorbing_states,
+            goal_states=environment.goal_states,
         )
 
         equivalent_policy_exists: bool = False

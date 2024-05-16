@@ -98,7 +98,7 @@ class   PosteriorInference():
                         #If a ROI is given, only compute likelihoods within Region of Interest to save compute.
                         if self.region_of_interest is not None:
                             if idx_parameter not in self.region_of_interest:
-                                log_likelihoods[log_likelihoods] = -np.inf
+                                log_likelihoods[idx_parameter] = -np.inf
                                 continue
 
                         #Insert parameter values into custom functions.
