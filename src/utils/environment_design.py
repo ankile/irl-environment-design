@@ -49,30 +49,21 @@ class EnvironmentDesign():
 
         #Check whether we have both custom functions and parameter ranges for what we want to learn. For function we don't want to learn, we use the true functions.
         if "R" in learn_what:
-            assert base_environment.reward_function is not None, "You want to learn the reward function. Provide a parameterized reward function in base_environment.reward_function."
             assert parameter_ranges_R is not None, "You want to learn the reward function. Provide the parameter ranges for the reward function."
-            assert parameter_ranges_R.ndim in [1,2], "Parameter ranges for reward function should be a one (learn one parameter) or two-dimensional (learn multiple parameters) numpy array."
+            assert parameter_ranges_R.ndim == 2, "Parameter ranges for reward function should be a two-dimensional numpy array of shape (n_parameters_R, mesh_size)."
             self.base_environment.parameter_ranges_R = parameter_ranges_R
-        else:
-            base_environment.reward_function = user_params.R
 
 
         if "gamma" in learn_what:
-            assert base_environment.gamma is not None, "You want to learn the discount rate. Provide a parameterized discount function in base_environment.gamma. This is usually the identity function."
             assert parameter_ranges_gamma is not None, "You want to learn the discount rate. Provide the parameter ranges for the discount rate."
-            assert parameter_ranges_gamma.ndim in [1,2], "Parameter ranges for gamma should be a one (learn one parameter) or two-dimensional (learn multiple parameters) numpy array."
+            assert parameter_ranges_gamma.ndim ==2, "Parameter ranges for gamma should be a two-dimensional numpy array of shape (1, mesh_size)."
             self.base_environment.parameter_ranges_gamma = parameter_ranges_gamma
-        else:
-            base_environment.gamma = user_params.gamma
 
 
         if "T" in learn_what:
-            assert base_environment.transition_function is not None, "You want to learn the transition function. Provide a parameterized transition function in base_environment.transition_function."
             assert parameter_ranges_T is not None, "You want to learn the transition function. Provide the parameter ranges for the transition function."
-            assert parameter_ranges_T.ndim in [1,2], "Parameter ranges for transition function should be a one (learn one parameter) or two-dimensional (learn multiple parameters) numpy array."
+            assert parameter_ranges_T.ndim == 2, "Parameter ranges for transition function should be a two-dimensional numpy array of shape (n_parameters_T, mesh_size)."
             self.base_environment.parameter_ranges_T = parameter_ranges_T
-        else:
-            base_environment.transition_function = user_params.T
 
 
 
@@ -81,25 +72,16 @@ class EnvironmentDesign():
       
         self.all_parameter_ranges: list = []
         if "R" in learn_what:
-            if parameter_ranges_R.ndim == 2:
-                for param_range in parameter_ranges_R:
-                    self.all_parameter_ranges.append(param_range)
-            else:
-                self.all_parameter_ranges.append(parameter_ranges_R)
+            for param_range in parameter_ranges_R:
+                self.all_parameter_ranges.append(param_range)
 
         if "gamma" in learn_what:
-            if parameter_ranges_gamma.ndim == 2:
-                for param_range in parameter_ranges_gamma:
-                    self.all_parameter_ranges.append(param_range)
-            else:
-                self.all_parameter_ranges.append(parameter_ranges_gamma)
+            for param_range in parameter_ranges_gamma:
+                self.all_parameter_ranges.append(param_range)
 
         if "T" in learn_what:
-            if parameter_ranges_T.ndim == 2:
-                for param_range in parameter_ranges_T:
-                    self.all_parameter_ranges.append(param_range)
-            else:
-                self.all_parameter_ranges.append(parameter_ranges_T)
+            for param_range in parameter_ranges_T:
+                self.all_parameter_ranges.append(param_range)
 
 
 
@@ -205,6 +187,7 @@ class EnvironmentDesign():
                 pos_inference = PosteriorInference(base_environment=self.base_environment,
                                                    expert_trajectories=self.all_observations,
                                                    learn_what=self.learn_what,
+                                                   parameter_ranges=self.all_parameter_ranges,
                                                    parameter_mesh=self._named_parameter_mesh,
                                                    parameter_mesh_shape = self.shaped_parameter_mesh,
                                                    region_of_interest=region_of_interest)

@@ -26,6 +26,7 @@ class   PosteriorInference():
                  base_environment: Environment,
                  expert_trajectories: List[tuple[Environment, List[StateTransition]]],
                  learn_what: list,
+                 parameter_ranges: np.ndarray,
                  parameter_mesh: list,
                  parameter_mesh_shape: np.ndarray,
                  region_of_interest = None) -> None:
@@ -37,6 +38,7 @@ class   PosteriorInference():
         self.learn_what = learn_what
         self.parameter_mesh = parameter_mesh
         self.parameter_mesh_shape = parameter_mesh_shape
+        self.parameter_ranges = parameter_ranges
         # self.min_gamma = min_gamma
         # self.max_gamma = max_gamma
         # self.min_p = min_p
@@ -78,7 +80,8 @@ class   PosteriorInference():
                 #Arrays to loop over and store results.
                 # log_likelihoods: np.ndarray = np.zeros(shape = (self.resolution, self.resolution))
                 # _n_user_params = self.parameter_ranges.ndim
-                log_likelihoods: np.ndarray = np.zeros_like(self.parameter_mesh)
+                log_likelihoods: np.ndarray = np.zeros_like(self.parameter_mesh_shape.flatten())
+                print(f"Beginning calculation of log-likelihood. Calculating {len(log_likelihoods)} samples.")
 
 
                 #Observations up to current episode.
@@ -98,7 +101,7 @@ class   PosteriorInference():
                         #         log_likelihoods[idx_p, idx_gamma] = -np.inf
                         #         continue
 
-                        #Insert parameter values into 
+                        #Insert parameter values into custom functions.
                         _transition_func = self.base_environment.transition_function(*parameter.T)
                         _reward_func = self.base_environment.reward_function(*parameter.R)
                         _gamma = parameter.gamma
@@ -108,15 +111,16 @@ class   PosteriorInference():
                         likelihood = expert_trajectory_log_likelihood(
                             transition_function=_transition_func,
                             reward_function=_reward_func,
-                            gamma=_gamma,
+                            gamma=_gamma,   
                             expert_trajectories=expert_trajectories
                         )
 
                         log_likelihoods[idx_parameter] = likelihood
 
-                log_likelihoods = log_likelihoods.reshape(shape = self.parameter_mesh_shape.shape) #TODO, is this reshaping correct?
+                #Unflatten likelihoods.        
+                log_likelihoods = np.array(log_likelihoods)
+                log_likelihoods = np.reshape(log_likelihoods, self.parameter_mesh_shape.shape) #TODO, is this reshape correct? E.g. do we get the right axes?s
                 
-                # del _n_user_params
                 del _transition_func, _reward_func, _gamma
 
 
