@@ -22,28 +22,19 @@ class   PosteriorInference():
     - resolution: int, mesh resolution of the posterior distribution.
     '''
 
-    def __init__(self, 
+    def __init__(self,
+                 base_environment: Environment,
                  expert_trajectories: List[tuple[Environment, List[StateTransition]]],
-                 parameter_ranges,
-                #  resolution: int=15,
                  learn_what: list,
-                 custom_reward_function,
-                 custom_transition_function,
-                 indexes_custom_funs,
-                #  min_gamma: float = 0.05,
-                #  max_gamma: float = 0.95,
-                #  min_p: float = 0.05,
-                #  max_p: float = 0.95,
+                 parameter_mesh: list,
                  region_of_interest = None) -> None:
         
 
+        self.base_environment = base_environment
         self.expert_trajectories = expert_trajectories
         # self.resolution = resolution
-        self.parameter_ranges = parameter_ranges
         self.learn_what = learn_what
-        self.custom_reward_function = custom_reward_function
-        self.custom_transition_function = custom_transition_function
-        self.indexes_custom_funs = indexes_custom_funs
+        self.parameter_mesh = parameter_mesh
         # self.min_gamma = min_gamma
         # self.max_gamma = max_gamma
         # self.min_p = min_p
@@ -52,6 +43,7 @@ class   PosteriorInference():
 
         # self.gammas = np.linspace(self.min_gamma, self.max_gamma, self.resolution)
         # self.ps = np.linspace(self.min_p, self.max_p, self.resolution)
+
 
 
     
@@ -83,8 +75,8 @@ class   PosteriorInference():
         def _compute_likelihood_for_episode(episode):
                 #Arrays to loop over and store results.
                 # log_likelihoods: np.ndarray = np.zeros(shape = (self.resolution, self.resolution))
-                _n_user_params = self.parameter_ranges.ndim
-                log_likelihoods: np.ndarray = np.zeros(shape = self.resolution**_n_user_params)
+                # _n_user_params = self.parameter_ranges.ndim
+                log_likelihoods: np.ndarray = np.zeros_like(self.parameter_mesh)
 
 
                 #Observations up to current episode.
@@ -96,7 +88,7 @@ class   PosteriorInference():
                 # for idx_p, p in tqdm(enumerate(self.ps)):
                 #     for idx_gamma, gamma in tqdm(enumerate(self.gammas), leave=False):
 
-                for idx_parameter, parameter in enumerate(itertools.product(*self.parameter_ranges)):
+                for idx_parameter, parameter in enumerate(self.parameter_mesh):
 
                         # #If a ROI is given, only compute likelihoods for Region of Interest to save compute.
                         # if self.region_of_interest is not None:
@@ -104,26 +96,25 @@ class   PosteriorInference():
                         #         log_likelihoods[idx_p, idx_gamma] = -np.inf
                         #         continue
 
-
-                        #Generate custom reward and transition functions according to current sample.
-                        _transition_func = self.custom_transition_function(*parameter[self.indexes_custom_funs["transition_function"]])
-                        _reward_func = self.custom_reward_function(*parameter[self.indexes_custom_funs["reward_function"]])
-                        gamma = parameter[self.indexes_custom_funs["gamma"]]
+                        #Insert parameter values into 
+                        _transition_func = self.base_environment.transition_function(*parameter.T)
+                        _reward_func = self.base_environment.reward_function(*parameter.R)
+                        _gamma = parameter.gamma
 
 
                         #Calculate log-likelihood.
                         likelihood = expert_trajectory_log_likelihood(
-                            _transition_func,
-                            _reward_func,
-                            gamma,
-                            expert_trajectories
+                            transition_function=_transition_func,
+                            reward_function=_reward_func,
+                            gamma=_gamma,
+                            expert_trajectories=expert_trajectories
                         )
 
                         log_likelihoods[idx_parameter] = likelihood
 
                 log_likelihoods = log_likelihoods.reshape(shape = _n_user_params*[self.resolution]) #TODO, is this reshaping correct?
-                del _n_user_params
-                del _transition_func, _reward_func
+                # del _n_user_params
+                del _transition_func, _reward_func, _gamma
 
 
                 return log_likelihoods

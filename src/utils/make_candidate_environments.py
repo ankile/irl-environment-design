@@ -198,7 +198,9 @@ class EntropyBM():
 
 
             # Compute Behavior Map
-            bm_out = bm.plot_bmap(world=_world, gammas=self.gammas, probs=self.probs)
+            # bm_out = bm.plot_bmap(world=_world, gammas=self.gammas, probs=self.probs)
+            bm_out = bm.plot_bmap(world=_world, )
+
 
             #Compute entropy of BM
             cover, max_ent_prob = self.compute_covers(bm_out)

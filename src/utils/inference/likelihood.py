@@ -47,7 +47,7 @@ def expert_trajectory_log_likelihood(
     V = None
     policy = None
 
-    for env, trajectories in expert_trajectories:
+    for env, trajectories in expert_trajectories: #TODO do we need env here?
         # assert env.goal_states is not None, "Add goal states to environment."
         # T_agent = transition_matrix(env.N, env.M, p=parameter_sample.p, absorbing_states=env.goal_states)
         # T_agent = insert_walls_into_T(T_agent, wall_indices=env.wall_states) #this is new

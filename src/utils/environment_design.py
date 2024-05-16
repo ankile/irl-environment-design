@@ -4,6 +4,7 @@ import numpy as np
 import pickle
 import datetime
 from copy import deepcopy
+import itertools
 
 from .make_environment import transition_matrix, insert_walls_into_T
 from .optimization import soft_q_iteration, grad_policy_maximization
@@ -12,7 +13,7 @@ from .inference.rollouts import generate_n_trajectories
 from .inference.likelihood import compute_log_likelihood
 from src.utils.inference.sampling import bayesian_parameter_learning
 from .make_environment import Environment
-from .constants import ParamTuple, beta_agent
+from .constants import ParamTuple, beta_agent, GenParamTuple
 from .inference.posterior import PosteriorInference
 from src.utils.make_candidate_environments import EntropyBM
 from src.worlds.mdp2d import Experiment_2D
@@ -26,45 +27,122 @@ class EnvironmentDesign():
 
     def __init__(self,
                  base_environment: Environment,
-                 user_params: ParamTuple,
+                 user_params: GenParamTuple,
                  learn_what: list,
-                 parameter_ranges: np.array,
-                 resolution: int,
-                 indexes_custom_funs: dict,
-                 custom_reward_function = None,
-                 custom_transition_function = None,
+                 parameter_ranges_R: np.array = None,
+                 parameter_ranges_gamma: np.array = None,
+                 parameter_ranges_T: np.array = None,
     ):
         '''
         
         Args:
         - base_environment: Environment: the environment in which we observe the human.
         - user_params: ParamTuple: the true, unknown parameters of the agent that we want to learn.
-        - parameter_ranges: np.array: the ranges of the parameters that we want to learn. E.g. parameter_ranges = np.array([[0.5, 0.95], [0.5, 0.95]]) means that we learn two parameters in the range [0.5, 0.95].
-        - resolution: int: the resolution of the grid on which we learn the parameters.
-        - custom_reward_function, optional: custom reward function, if not given, use reward from function from base_environment
-        - custom_transition_function, optional: custom transition function, if not given, use transition function from base_environment
         - learn_what: list: which parameters we learn, e.g. learn_what = ['R', 'gamma'] means we learn R and gamma while the transition function is assumed to be known.
         '''
         
         self.base_environment = base_environment
         self.user_params = user_params
-        self.parameter_ranges = parameter_ranges
-        self.resolution = resolution
-        self.custom_reward_function = custom_reward_function
-        self.custom_transition_function = custom_transition_function
-        self.indexes_custom_funs = indexes_custom_funs
         self.all_observations = []
         self.learn_what = learn_what
 
-        #Check whether the parameters to learn are valid.
+
+        #Check whether we have both custom functions and parameter ranges for what we want to learn. For function we don't want to learn, we use the true functions.
         if "R" in learn_what:
-            assert custom_reward_function is not None, "You want to learn the reward function but did not provide a custom reward function."
+            assert base_environment.reward_function is not None, "You want to learn the reward function. Provide a parameterized reward function in base_environment.reward_function."
+            assert parameter_ranges_R is not None, "You want to learn the reward function. Provide the parameter ranges for the reward function."
+            assert parameter_ranges_R.ndim in [1,2], "Parameter ranges for reward function should be a one (learn one parameter) or two-dimensional (learn multiple parameters) numpy array."
+            self.base_environment.parameter_ranges_R = parameter_ranges_R
+        else:
+            base_environment.reward_function = user_params.R
+
+
+        if "gamma" in learn_what:
+            assert base_environment.gamma is not None, "You want to learn the discount rate. Provide a parameterized discount function in base_environment.gamma. This is usually the identity function."
+            assert parameter_ranges_gamma is not None, "You want to learn the discount rate. Provide the parameter ranges for the discount rate."
+            assert parameter_ranges_gamma.ndim in [1,2], "Parameter ranges for gamma should be a one (learn one parameter) or two-dimensional (learn multiple parameters) numpy array."
+            self.base_environment.parameter_ranges_gamma = parameter_ranges_gamma
+        else:
+            base_environment.gamma = user_params.gamma
+
+
         if "T" in learn_what:
-            assert custom_transition_function is not None, "You want to learn the transition function but did not provide a custom transition function."
+            assert base_environment.transition_function is not None, "You want to learn the transition function. Provide a parameterized transition function in base_environment.transition_function."
+            assert parameter_ranges_T is not None, "You want to learn the transition function. Provide the parameter ranges for the transition function."
+            assert parameter_ranges_T.ndim in [1,2], "Parameter ranges for transition function should be a one (learn one parameter) or two-dimensional (learn multiple parameters) numpy array."
+            self.base_environment.parameter_ranges_T = parameter_ranges_T
+        else:
+            base_environment.transition_function = user_params.T
 
-        self.parameter_ranges_array = [np.linspace(parameter_ranges[i][0], parameter_ranges[i][1], resolution) for i in range(len(parameter_ranges))]
 
 
+        #Merge the parameter ranges of all learned parameters into one list of arrays. #TODO make this cleaner.
+        #List has the form [Mesh_R_1, Mesh_R_2,...,Mesh_R_n,Mesh_gamma, Mesh_T_1,...,Mesh_T_n] where Mesh is a one-dimensional numpy array containing the mesh of the parameter.
+      
+        self.all_parameter_ranges: list = []
+        if "R" in learn_what:
+            if parameter_ranges_R.ndim == 2:
+                for param_range in parameter_ranges_R:
+                    self.all_parameter_ranges.append(param_range)
+            else:
+                self.all_parameter_ranges.append(parameter_ranges_R)
+
+        if "gamma" in learn_what:
+            if parameter_ranges_gamma.ndim == 2:
+                for param_range in parameter_ranges_gamma:
+                    self.all_parameter_ranges.append(param_range)
+            else:
+                self.all_parameter_ranges.append(parameter_ranges_gamma)
+
+        if "T" in learn_what:
+            if parameter_ranges_T.ndim == 2:
+                for param_range in parameter_ranges_T:
+                    self.all_parameter_ranges.append(param_range)
+            else:
+                self.all_parameter_ranges.append(parameter_ranges_T)
+
+
+
+        #Generate mesh of parameters that we learn to later calculate Behavior Map and likelihood. #TODO should this be a list or an ndarray
+        n_params_R = parameter_ranges_R.shape[0] if "R" in learn_what else 0
+        n_params_gamma = parameter_ranges_gamma.shape[0] if "gamma" in learn_what else 0
+        n_params_T = parameter_ranges_T.shape[0] if "T" in learn_what else 0
+
+
+        self._named_parameter_mesh = []
+        for _, parameter in enumerate(itertools.product(*self.all_parameter_ranges)):
+
+            if "R" in learn_what:
+                R = parameter[:n_params_R]
+            else:
+                R = user_params.R
+            
+            if ("gamma" in learn_what) and ("R" in learn_what):
+                gamma = parameter[n_params_R:n_params_R+n_params_gamma]
+            elif "gamma" in learn_what:
+                gamma = parameter[:n_params_gamma]
+            else:
+                gamma = user_params.gamma
+
+            if "T" in learn_what:
+                T = parameter[-n_params_T:]
+            else:
+                T = user_params.T
+            self._named_parameter_mesh.append(GenParamTuple(R=R, gamma=gamma, T=T))
+
+
+        #Determine proper dimension of mesh to calculate posterior mean. mesh is of shape (resolution R Param 1 x ... x resolution R param n x resolution gamma x resolution T param 1 x ... x resolution T param n)
+        shape_mesh = []
+        if "R" in learn_what:
+            shape_mesh.append([parameter_ranges_R.shape[1]]*parameter_ranges_R.shape[0])
+        if "gamma" in learn_what:
+            shape_mesh.append([parameter_ranges_gamma.shape[1]]*parameter_ranges_gamma.shape[0])
+        if "T" in learn_what:
+            shape_mesh.append([parameter_ranges_T.shape[1]]*parameter_ranges_T.shape[0])
+        self.shaped_parameter_mesh = np.empty(shape=(shape_mesh))
+
+
+        #Supported environment design methods.
         self.candidate_env_generation_methods = ["random_walls", "hard_coded_envs", "Naive_BM", "entropy_BM"]
 
     
@@ -120,17 +198,10 @@ class EnvironmentDesign():
                 # max_gamma = 0.95
                 # min_p = 0.5
                 # max_p = 0.95
-                pos_inference = PosteriorInference(self.all_observations,
-                                                #    resolution=12,
-                                                   parameter_ranges=self.parameter_ranges_array,
+                pos_inference = PosteriorInference(base_environment=self.base_environment,
+                                                   expert_trajectories=self.all_observations,
                                                    learn_what=self.learn_what,
-                                                   custom_reward_function=self.custom_reward_function,
-                                                   custom_transition_function=self.custom_transition_function,
-                                                   indexes_custom_funs=self.indexes_custom_funs,
-                                                #    min_gamma = min_gamma,
-                                                #    max_gamma = max_gamma,
-                                                #    min_p = min_p,
-                                                #    max_p = max_p,
+                                                   parameter_mesh=self._named_parameter_mesh,
                                                    region_of_interest=region_of_interest)
                 
                 current_belief = pos_inference.calculate_posterior(episode=episode)
@@ -195,7 +266,7 @@ class EnvironmentDesign():
                 #World to compute Behavior Map. TODO: this should take arbitrary arguments and not only gamma/p.
                 _world = Experiment_2D(self.base_environment.N,
                                        self.base_environment.M,
-                                       rewards=R_estimate,
+                                       rewards=estimate_R,
                                        absorbing_states=self.base_environment.goal_states,
                                        wall_states=self.base_environment.wall_states)
 
@@ -371,13 +442,14 @@ class EnvironmentDesign():
         Returns:
         - tuple of (Environment, trajectories)
         '''
+        assert environment.reward_function is np.ndarray, f"Provide a reward function for the environment of type np.ndarray. You provided: {type(environment.reward_function)}."
+        assert environment.transition_function is np.ndarray, f"Provide a transition function for the environment of type np.ndarray. You provided: {type(environment.transition_function)}"
         
 
         #Calculate policy of agent in environment.
-        T_agent = transition_matrix(environment.N, environment.M, p=self.user_params.p, absorbing_states=environment.goal_states)
-        T_agent = insert_walls_into_T(T=T_agent, wall_indices=environment.wall_states)
-        #Here we use the (possibly updated) reward function and not the initial ('true') reward function
-        agent_policy = soft_q_iteration(environment.R_true, T_agent, gamma=self.user_params.gamma, beta=beta_agent)
+        # T_agent = transition_matrix(environment.N, environment.M, p=self.user_params.p, absorbing_states=environment.goal_states)
+        # T_agent = insert_walls_into_T(T=T_agent, wall_indices=environment.wall_states)
+        agent_policy = soft_q_iteration(environment.reward_function, environment.transition_function, gamma=self.user_params.gamma, beta=beta_agent)
 
         # Generate trajectories.
         trajectories = generate_n_trajectories(

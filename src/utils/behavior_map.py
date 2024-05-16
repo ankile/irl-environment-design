@@ -25,54 +25,54 @@ ExperimentResult = namedtuple("ExperimentResult", ["data", "p2idx", "pidx2states
 
 def plot_bmap(
     world: mdp2d.Experiment_2D,
-    gammas: np.ndarray,
-    probs: np.ndarray,
-    start_state=0,
-    ax=None,
-    plot:bool = False
+    # gammas: np.ndarray,
+    # probs: np.ndarray,
+    parameters: np.ndarray,
+    # start_state=0,
+    custom_reward_function,
+    custom_transition_function
+    # ax=None,
+    # plot:bool = False
 ):
     result = calculate_behavior_map(
         experiment=world,
         params=world.params,
-        gammas=gammas,
-        probs=probs,
-        start_state=start_state,
+        # gammas=gammas,
+        # probs=probs,
+        paramterers=parameters,
+        # start_state=start_state,
     )
 
-    data = result.data
+    # data = result.data
 
-    if plot:
+    # if plot:
 
-        if ax is None:
-            _, ax = plt.subplots(figsize=(4, 4))
+    #     if ax is None:
+    #         _, ax = plt.subplots(figsize=(4, 4))
 
-        make_general_strategy_heatmap(
-            results=data,
-            probs=probs,
-            p2idx=None,
-            title=f"",
-            ax=ax,
-            gammas=gammas,
-            annot=False,
-            ax_labels=False,
-            num_ticks=5,
-            legend=False
-        )
+    #     make_general_strategy_heatmap(
+    #         results=data,
+    #         probs=probs,
+    #         p2idx=None,
+    #         title=f"",
+    #         ax=ax,
+    #         gammas=gammas,
+    #         annot=False,
+    #         ax_labels=False,
+    #         num_ticks=5,
+    #         legend=False
+    #     )
     return result
 
 
 def calculate_behavior_map(
     experiment: Experiment_2D,
-    # transition_matrix_func: Callable,
-    params: dict,
-    gammas: np.ndarray,
-    probs: np.ndarray,
-    start_state: int,
-    # reward_function_type: str = None,
-    # reward_params_a: np.ndarray = None,
-    # reward_params_b: np.ndarray = None,
-    # realized_probs_indices: list | None = None,
-    # goal_states: set | None = None,
+    paramterers: np.ndarray,
+    custom_reward_function,
+    custom_transition_function,
+    # gammas: np.ndarray,
+    # probs: np.ndarray,
+    # start_state: int,
 ) -> ExperimentResult:
     """
     Run an experiment with a given set of parameters and return the results.
@@ -83,7 +83,8 @@ def calculate_behavior_map(
     - p2idx: a dictionary mapping policies to indices
     """
 
-    data = np.zeros((len(probs), len(gammas)), dtype=np.int32)
+    # data = np.zeros((len(probs), len(gammas)), dtype=np.int32)
+    data: np.ndarray = np.zeros_like(paramterers, dtype=np.int32)
     p2idx: Dict[str, int] = {}
     pidx2states: Dict[list, int] = {}
 
@@ -92,17 +93,15 @@ def calculate_behavior_map(
     idx_policy = 0
 
 
-    for (i, prob), (j, gamma) in itertools.product(enumerate(probs), enumerate(gammas)):
+    # for (i, prob), (j, gamma) in itertools.product(enumerate(probs), enumerate(gammas)):
+    for idx_parameter, parameter in enumerate(itertools.product(paramterers)):
 
-        experiment.set_user_params(
-            prob=prob,
-            gamma=gamma,
-            # reward_param_a=reward_param_a,
-            # reward_param_b=reward_param_b,
-            params=params,
-            # transition_func=transition_matrix_func,
-            use_pessimistic=False,
-        )
+        # experiment.set_user_params(
+        #     prob=prob,
+        #     gamma=gamma,
+        #     use_pessimistic=False,
+        # )
+        self.R = custom_reward_function(**parameter)[]
 
         experiment.mdp.solve(
             # save_heatmap=False,
