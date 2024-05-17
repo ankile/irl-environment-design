@@ -69,6 +69,7 @@ ExperimentResult = namedtuple("ExperimentResult", ["data", "p2idx", "pidx2states
 #TODO, only compute over Region of Interest.
 def calculate_behavior_map(
     environment: mdp2d.Experiment_2D,
+    reward_update: np.ndarray,
     parameter_mesh,
     shaped_parameter_mesh,
     # gammas: np.ndarray,
@@ -119,6 +120,9 @@ def calculate_behavior_map(
         _transition_func = environment.transition_function(*parameter.T)
         _reward_func = environment.reward_function(*parameter.R)
         _gamma = parameter.gamma
+
+        #Update the reward function with the maximum entropy reward update from the previous iteration.
+        _reward_func += reward_update
 
         policy, Q, V = soft_q_iteration(
             _reward_func, _transition_func, gamma=_gamma, beta=beta_agent, return_what="all", Q_init=Q, V_init=V, policy_init=policy

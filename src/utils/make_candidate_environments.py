@@ -177,7 +177,7 @@ class EntropyBM():
                 _masked_gradient_R = torch.zeros_like(R_grad_out)
                 _masked_gradient_R[_visited_states] = R_grad_out[_visited_states]
 
-                if cover > max_ent_cover:
+                if (cover > max_ent_cover) or (cover == 1):
                     #Inhibit Behavior.
                     R = R - stepsize * _masked_gradient_R
                     
@@ -189,7 +189,7 @@ class EntropyBM():
         return R
     
     
-    def BM_search(self, base_environment, named_parameter_mesh, shaped_parameter_mesh, n_compute_BM: int, n_iterations_gradient: int = 20, stepsize_gradient: float = 0.01):
+    def BM_search(self, base_environment, named_parameter_mesh, shaped_parameter_mesh, n_compute_BM: int, n_iterations_gradient: int = 50, stepsize_gradient: float = 0.025):
 
         '''
         Find a reward function that maximizes the entropy of the Behavior Map.
@@ -202,18 +202,20 @@ class EntropyBM():
         R = self.estimate_R
         _max_ent = -np.inf
         max_ent_R = self.estimate_R
+        R_update = np.zeros_like(R)
 
         for _ in range(n_compute_BM):
 
 
             # Compute Behavior Map
             # bm_out = bm.plot_bmap(world=_world, gammas=self.gammas, probs=self.probs)
-            bm_out = bm.calculate_behavior_map(environment=environment, 
+            bm_out = bm.calculate_behavior_map(environment=environment,
+                                               reward_update=R_update,
                                                parameter_mesh=named_parameter_mesh,
                                                shaped_parameter_mesh=shaped_parameter_mesh)
 
             #Compute entropy of BM
-            cover, max_ent_prob = self.compute_covers(bm_out)
+            cover, _ = self.compute_covers(bm_out)
             entropy_BM = stats.entropy(list(cover.values()))
 
             #Check if the current Behavior Map has higher entropy.
@@ -223,10 +225,14 @@ class EntropyBM():
                 max_ent_R = R
 
             # Perform Gradient Updates on Reward Function to maximize entropy of BM.
-            R = self.gradient_updates_R(R_init = R, bm_out=bm_out, stepsize=stepsize_gradient, n_iterations=n_iterations_gradient)
+            R_update = self.gradient_updates_R(R_init = R, bm_out=bm_out, stepsize=stepsize_gradient, n_iterations=n_iterations_gradient)
+            R_update = R_update.detach().numpy()
 
-        #Save Reward Function
-        environment.reward_function = R.detach().numpy()
+            #Update Reward Function
+            R = R_update
+
+            #Save Reward Function
+            # environment.reward_function = R_update.detach().numpy()
 
         if self.verbose:
             print(f"Finished BM Search. Entropy: {_max_ent}.")

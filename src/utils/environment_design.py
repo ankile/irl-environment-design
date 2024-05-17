@@ -260,8 +260,8 @@ class EnvironmentDesign():
                                                       named_parameter_mesh=self._named_parameter_mesh,
                                                       shaped_parameter_mesh=self.shaped_parameter_mesh,
                                                       n_compute_BM = 5,
-                                                      n_iterations_gradient=20,
-                                                      stepsize_gradient=0.001)
+                                                      n_iterations_gradient=50,
+                                                      stepsize_gradient=0.01)
                                 
                 #Generate an environment in which we observe the human with maximal information gain.
                 optimal_environment = deepcopy(self.base_environment)
