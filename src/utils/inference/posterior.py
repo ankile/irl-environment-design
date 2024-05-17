@@ -78,6 +78,7 @@ class   PosteriorInference():
                 expert_trajectories = self.expert_trajectories[:episode]
 
 
+
                 #Calculate log-likelihood for each parameter sample.
                 for idx_parameter, parameter in enumerate(self.parameter_mesh):
 
@@ -87,10 +88,11 @@ class   PosteriorInference():
                                 log_likelihoods[idx_parameter] = -np.inf
                                 continue
 
+
                         #Insert parameter values into custom functions.
                         _transition_func = self.base_environment.transition_function(*parameter.T)
                         _reward_func = self.base_environment.reward_function(*parameter.R)
-                        _gamma = parameter.gamma
+                        _gamma = self.base_environment.gamma(*parameter.gamma)
 
 
                         #Calculate log-likelihood.

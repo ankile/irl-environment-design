@@ -2,7 +2,6 @@ import numpy as np
 import torch
 from numba import jit
 
-from src.utils.constants import beta_agent
 
 
 # @njit
@@ -116,9 +115,8 @@ def soft_bellman_FP_V(R, gamma, T, V):
 
 
 def soft_V_iteration_torch(R, gamma, T, V_init=None, tol=1e-4):
-    #TODO replace 49.
     if V_init is None:
-        V_init = torch.zeros(49)
+        V_init = torch.zeros_like(R)
 
     V = V_init
 

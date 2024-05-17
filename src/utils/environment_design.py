@@ -153,6 +153,7 @@ class EnvironmentDesign():
         
         self.episodes = n_episodes
         self.candidate_environments_args = candidate_environments_args
+        self.base_environment.max_ent_reward = self.base_environment.reward_function(*self.user_params.R)
 
         #Observe human in base environment. Append observation to all observations.
         if verbose:
@@ -213,7 +214,7 @@ class EnvironmentDesign():
                 if "R" in self.learn_what:
                     estimate_R = self.base_environment.reward_function(*mean_params[:self.n_params_R])
                 else:
-                    estimate_R = self.user_params.R
+                    estimate_R = self.base_environment.reward_function(*self.user_params.R)
 
 
                 if ("gamma" in self.learn_what) and ("R" in self.learn_what):
@@ -221,14 +222,16 @@ class EnvironmentDesign():
                 elif "gamma" in self.learn_what:
                     estimate_gamma = mean_params[:self.n_params_gamma]
                 else:
-                    estimate_gamma = self.user_params.gamma
+                    estimate_gamma = self.base_environment.gamma(*self.user_params.gamma)
+
 
 
                 if "T" in self.learn_what:
                     estimate_T = self.base_environment.transition_function(*mean_params[-self.n_params_T:])
                 else:
-                    estimate_T = self.user_params.T
+                    estimate_T = self.base_environment.transition_function(*self.user_params.T)
                 del mean_params
+
 
 
 
@@ -255,7 +258,7 @@ class EnvironmentDesign():
                                 
                 #Generate an environment in which we observe the human with maximal information gain.
                 optimal_environment = deepcopy(self.base_environment)
-                optimal_environment.R_true = updated_reward
+                optimal_environment.max_ent_reward = updated_reward
 
                 end_time = datetime.datetime.now()
                 run_time = end_time - start_time
@@ -423,11 +426,20 @@ class EnvironmentDesign():
         #Calculate policy of agent in environment.
         # T_agent = transition_matrix(environment.N, environment.M, p=self.user_params.p, absorbing_states=environment.goal_states)
         # T_agent = insert_walls_into_T(T=T_agent, wall_indices=environment.wall_states)
-        agent_policy = soft_q_iteration(self.user_params.R, self.user_params.T, gamma=self.user_params.gamma, beta=beta_agent)
+        
+        # _reward_function = environment.reward_function(*self.user_params.R) + environment.max_ent_reward
+        _reward_function = environment.max_ent_reward
+
+        _transition_function = environment.transition_function(*self.user_params.T)
+        _gamma = environment.gamma(*self.user_params.gamma)
+
+        print("Observing human in reward function: ", _reward_function)
+
+        agent_policy = soft_q_iteration(_reward_function, _transition_function, _gamma, beta=beta_agent)
 
         # Generate trajectories.
         trajectories = generate_n_trajectories(
-            self.user_params.T,
+            _transition_function,
             agent_policy,
             environment.goal_states,
             n_trajectories=n_trajectories,

@@ -91,12 +91,12 @@ class EntropyBM():
         '''
         behavior_map_flat = behavior_map.data.flatten()
 
-        self.behavior_ROI = []
+        behavior_ROI = []
         for idx in range(len(behavior_map_flat)):
             if idx in self.region_of_interest:
-                self.behavior_ROI.append(behavior_map_flat[idx])
+                behavior_ROI.append(behavior_map_flat[idx])
 
-        return self.behavior_ROI
+        return behavior_ROI
 
 
     def compute_covers(self, behavior_map):
@@ -113,14 +113,14 @@ class EntropyBM():
         '''
 
         #Compute Behavior Map restricted to Region of Interest.
-        self.behavior_ROI = self.compute_bm_ROI(behavior_map)
+        behavior_ROI = self.compute_bm_ROI(behavior_map)
 
-        _behaviors = np.unique(self.behavior_ROI)
-        n_behavior_samples = len(self.behavior_ROI)
+        _behaviors = np.unique(behavior_ROI)
+        n_behavior_samples = len(behavior_ROI)
         covers = {}
 
         for b in _behaviors:
-            covers[b] = np.sum(self.behavior_ROI == b) / n_behavior_samples
+            covers[b] = np.sum(behavior_ROI == b) / n_behavior_samples
 
         max_ent_cover = 1/len(_behaviors)
 
@@ -160,12 +160,11 @@ class EntropyBM():
         # print("V_star.shape: ", V_star.shape)
         
 
-        for _ in range(n_iterations):
+        for _idx in range(n_iterations):
 
 
             # Compute the gradient of the value function with respect to the reward function and the transition matrix.
             V_star, R_grad_out, _ = differentiate_V(R = R, gamma = gamma, T = T, V = V_star)
-
 
             # Update the reward function
             for behavior_idx in covers:
@@ -185,10 +184,16 @@ class EntropyBM():
                 #Inhibit behavior that covers more than maximum entropy share.
                 if (cover > max_ent_cover) or (cover == 1):
                     R = R - stepsize * _masked_gradient_R
+
+                    # if _idx==n_iterations-1:
+                    #     print(f"Inhibited behavior. Masked gradient R: {_masked_gradient_R}. Cover: {cover}.")
                     
                 #Excite behavior that covers less than maximum entropy share.
                 else:
                     R = R + stepsize * _masked_gradient_R
+
+                    # if _idx==n_iterations-1:
+                        # print(f"Excited behavior. Masked gradient R: {_masked_gradient_R}. Cover: {cover}.")
 
         return R
     
@@ -232,8 +237,10 @@ class EntropyBM():
                 _max_ent = entropy_BM
                 _max_ent_cover = cover
                 max_ent_R = R
+                _max_ent_BM = bm_out
 
             # Perform Gradient Updates on Reward Function to maximize entropy of BM.
+            # print("\nUpdating Reward Function\n")
             R_update = self.gradient_updates_R(R_init = R, bm_out=bm_out, stepsize=stepsize_gradient, n_iterations=n_iterations_gradient)
             R_update = R_update.detach().numpy()
 
@@ -245,8 +252,9 @@ class EntropyBM():
             # environment.reward_function = R_update.detach().numpy()
 
         if self.verbose:
-            print(f"Finished BM Search. Entropy: {_max_ent}. Max Ent possible: {max_ent_possible}. Cover: {_max_ent_cover}.")
-
+            print(f"Finished BM Search. Entropy: {_max_ent}. Max Ent possible: {max_ent_possible}. Cover: {_max_ent_cover}. Behaviors: {bm_out.pidx2states}")
+            print("Behavior map: ", _max_ent_BM)
+            print("Reward Function: ", max_ent_R)
         return max_ent_R
         
 
