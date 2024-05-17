@@ -8,7 +8,6 @@ import itertools
 
 from .make_environment import transition_matrix, insert_walls_into_T
 from .optimization import soft_q_iteration, grad_policy_maximization
-# from .optimization import value_iteration_with_policy
 from .inference.rollouts import generate_n_trajectories
 from .inference.likelihood import compute_log_likelihood
 from src.utils.inference.sampling import bayesian_parameter_learning
@@ -37,7 +36,10 @@ class EnvironmentDesign():
         Args:
         - base_environment: Environment: the environment in which we observe the human.
         - user_params: ParamTuple: the true, unknown parameters of the agent that we want to learn.
-        - learn_what: list: which parameters we learn, e.g. learn_what = ['R', 'gamma'] means we learn R and gamma while the transition function is assumed to be known.
+        - learn_what: list: which parameters we learn, e.g. learn_what = ['R', 'gamma'] means we learn R and gamma while the transition function is assumed to be known. Allowed values: ['R', 'gamma', 'T']
+        - parameter_ranges_R: np.array: the parameter ranges for the reward function. Shape: (n_parameters_R, mesh_size).
+        - parameter_ranges_gamma: np.array: the parameter ranges for the discount rate. Shape: (1, mesh_size).
+        - parameter_ranges_T: np.array: the parameter ranges for the transition function. Shape: (n_parameters_T, mesh_size).
         '''
         
         self.base_environment = base_environment

@@ -240,8 +240,7 @@ class EntropyBM():
             #Update Reward Function
             R = R_update
 
-            # print("Updated reward function: ", R_update)
-
+            #TODO: should we save the previous maximum entropy reward function for the next iteration to warm start?
             #Save Reward Function
             # environment.reward_function = R_update.detach().numpy()
 
@@ -439,47 +438,47 @@ class AgnosticsBM():
                 break
 
 
-    def generate_behavior_map(self,
-                              plot_bmap: bool = False):
+    # def generate_behavior_map(self,
+    #                           plot_bmap: bool = False):
 
-        '''
-        Calculate the behavior map.
-        '''
+    #     '''
+    #     Calculate the behavior map.
+    #     '''
 
-        self.world = make_world(height=self.perturbed_environment.N,
-                          width=self.perturbed_environment.M,
-                          rewards=self.perturbed_environment.R_true,
-                          absorbing_states=self.perturbed_environment.goal_states,
-                          wall_states=self.perturbed_environment.wall_states)
+    #     self.world = make_world(height=self.perturbed_environment.N,
+    #                       width=self.perturbed_environment.M,
+    #                       rewards=self.perturbed_environment.R_true,
+    #                       absorbing_states=self.perturbed_environment.goal_states,
+    #                       wall_states=self.perturbed_environment.wall_states)
 
-        behavior_map_perturbed_environment = bm.plot_bmap(
-            world=self.world,
-            gammas=gammas,
-            probs=probs,
-            plot=plot_bmap
-        )
+    #     behavior_map_perturbed_environment = bm.plot_bmap(
+    #         world=self.world,
+    #         gammas=gammas,
+    #         probs=probs,
+    #         plot=plot_bmap
+    #     )
 
-        return behavior_map_perturbed_environment
+    #     return behavior_map_perturbed_environment
 
     
-    def plot_behavior_map(self, environment, gammas, probs):
+    # def plot_behavior_map(self, environment, gammas, probs):
 
-        '''
-        Plot the behavior map of an environment for parameter bounds gammas and probs.
-        '''
+    #     '''
+    #     Plot the behavior map of an environment for parameter bounds gammas and probs.
+    #     '''
 
-        self.world = make_world(height=environment.N,
-                          width=environment.M,
-                          rewards=environment.R_true,
-                          absorbing_states=environment.goal_states,
-                          wall_states=environment.wall_states)
+    #     self.world = make_world(height=environment.N,
+    #                       width=environment.M,
+    #                       rewards=environment.R_true,
+    #                       absorbing_states=environment.goal_states,
+    #                       wall_states=environment.wall_states)
 
-        self.behavior_map_perturbed_environment = bm.plot_bmap(
-            world=self.world,
-            gammas=gammas,
-            probs=probs,
-            plot=True
-        )
+    #     self.behavior_map_perturbed_environment = bm.plot_bmap(
+    #         world=self.world,
+    #         gammas=gammas,
+    #         probs=probs,
+    #         plot=True
+    #     )
 
     def plot_props_over_time(self, iteration=None):
 

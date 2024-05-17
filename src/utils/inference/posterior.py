@@ -2,8 +2,6 @@ from typing import List
 
 import numpy as np
 import matplotlib.pyplot as plt
-from tqdm import tqdm
-import itertools
 
 from ..make_environment import Environment
 from ..constants import ParamTuple, StateTransition
@@ -39,14 +37,7 @@ class   PosteriorInference():
         self.parameter_mesh = parameter_mesh
         self.parameter_mesh_shape = parameter_mesh_shape
         self.parameter_ranges = parameter_ranges
-        # self.min_gamma = min_gamma
-        # self.max_gamma = max_gamma
-        # self.min_p = min_p
-        # self.max_p = max_p
         self.region_of_interest = region_of_interest
-
-        # self.gammas = np.linspace(self.min_gamma, self.max_gamma, self.resolution)
-        # self.ps = np.linspace(self.min_p, self.max_p, self.resolution)
 
 
 
@@ -77,9 +68,8 @@ class   PosteriorInference():
         assert (type(episode) == int) or (episode is None)
 
         def _compute_likelihood_for_episode(episode):
+                
                 #Arrays to loop over and store results.
-                # log_likelihoods: np.ndarray = np.zeros(shape = (self.resolution, self.resolution))
-                # _n_user_params = self.parameter_ranges.ndim
                 log_likelihoods: np.ndarray = np.zeros_like(self.parameter_mesh_shape.flatten())
                 print(f"Beginning calculation of log-likelihood. Calculating {len(log_likelihoods)} samples.")
 
@@ -88,11 +78,7 @@ class   PosteriorInference():
                 expert_trajectories = self.expert_trajectories[:episode]
 
 
-                #Calculate log-likelihood for each (p, gamma) sample.
-                
-                # for idx_p, p in tqdm(enumerate(self.ps)):
-                #     for idx_gamma, gamma in tqdm(enumerate(self.gammas), leave=False):
-
+                #Calculate log-likelihood for each parameter sample.
                 for idx_parameter, parameter in enumerate(self.parameter_mesh):
 
                         #If a ROI is given, only compute likelihoods within Region of Interest to save compute.
@@ -310,11 +296,8 @@ class   PosteriorInference():
             _indexes_to_sum = [j for j in range(posterior_probabilities.ndim) if j != i]
             _probs = np.sum(posterior_probabilities, axis=tuple(_indexes_to_sum))
             _means.append(np.sum(self.parameter_ranges[i]*_probs)/total_probability)
-        # mean_p = np.sum(self.ps * np.sum(posterior_probabilities, axis=1))/total_probability
-        # mean_gamma = np.sum(self.gammas * np.sum(posterior_probabilities, axis=0))/total_probability
 
         return _means
-        # return ParamTuple(p=mean_p, gamma=mean_gamma, R=None)
     
 
     def MAP(self,
