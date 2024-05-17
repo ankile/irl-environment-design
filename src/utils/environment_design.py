@@ -225,7 +225,7 @@ class EnvironmentDesign():
 
 
                 if "T" in self.learn_what:
-                    estimate_T = self.base_environment.transition_function(*mean_params[:-self.n_params_T])
+                    estimate_T = self.base_environment.transition_function(*mean_params[-self.n_params_T:])
                 else:
                     estimate_T = self.user_params.T
                 del mean_params
@@ -249,9 +249,9 @@ class EnvironmentDesign():
                 updated_reward = entropy_bm.BM_search(base_environment = self.base_environment,
                                                       named_parameter_mesh=self._named_parameter_mesh,
                                                       shaped_parameter_mesh=self.shaped_parameter_mesh,
-                                                      n_compute_BM = 10,
-                                                      n_iterations_gradient=10,
-                                                      stepsize_gradient=0.001)
+                                                      n_compute_BM = candidate_environments_args["n_compute_BM"],
+                                                      n_iterations_gradient=candidate_environments_args["n_iterations_gradient"],
+                                                      stepsize_gradient=candidate_environments_args["stepsize_gradient"],)
                                 
                 #Generate an environment in which we observe the human with maximal information gain.
                 optimal_environment = deepcopy(self.base_environment)

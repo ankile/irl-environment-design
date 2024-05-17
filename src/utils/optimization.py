@@ -97,12 +97,18 @@ def soft_q_iteration(
 
 
 def soft_bellman_update_V(R, gamma, T, V):
+    
     if torch.isnan(V).any():
         print("V contains NaN values.")
         print("V: ", V)
         print("R: ", R)
         print("T: ", T)
+
     return torch.log(torch.sum(torch.exp(torch.matmul(T, R+gamma*V)), axis=1))
+    # _Q_Values = torch.einsum("ijk, k-> ij", T, R+gamma*V)
+    # _Q_Values = _Q_Values - torch.max(_Q_Values, axis=1, keepdims=True)[0] #Subtract max_Q for numerical stability
+    # return torch.log(torch.einsum("ij-> i", torch.exp(_Q_Values)))
+
 
 
 def soft_bellman_FP_V(R, gamma, T, V):
@@ -110,17 +116,28 @@ def soft_bellman_FP_V(R, gamma, T, V):
 
 
 def soft_V_iteration_torch(R, gamma, T, V_init=None, tol=1e-4):
+    #TODO replace 49.
     if V_init is None:
         V_init = torch.zeros(49)
 
     V = V_init
+
+    n_iterations = 0
     
     while True:
+
+        n_iterations += 1
         V_new = soft_bellman_update_V(R, gamma,T, V)
         if torch.max(torch.abs(V - V_new)) < tol:
             break
 
+        if n_iterations % 1_000 == 0:
+            print("Warning: Soft V-iteration did not converge within 1_000 steps.")
+            print("Error: ", torch.max(torch.abs(V - V_new)))
+
         V = V_new
+
+
 
 
     return V
@@ -149,7 +166,6 @@ def differentiate_V(R: torch.tensor, gamma: torch.tensor, T: torch.tensor, V: to
 
     #Perform value iteration to find a fixed point of the Bellman operator.
     V_star = soft_V_iteration_torch(R, gamma, T, V_init=V, tol=1e-3)
-    # V_star = soft_q_iteration(R, gamma, T, V_init=V, tol=1e-4, return_what="V", beta=beta_agent)
 
     #Calculate the gradient of the value function using the implicit function theorem.
     # A closed form expression for V is given by psi.
