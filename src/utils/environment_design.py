@@ -13,10 +13,9 @@ from .inference.rollouts import generate_n_trajectories
 from .inference.likelihood import compute_log_likelihood
 from src.utils.inference.sampling import bayesian_parameter_learning
 from .make_environment import Environment
-from .constants import ParamTuple, beta_agent, GenParamTuple
+from .constants import beta_agent, GenParamTuple
 from .inference.posterior import PosteriorInference
 from src.utils.make_candidate_environments import EntropyBM
-from src.worlds.mdp2d import Experiment_2D
 
 
 class EnvironmentDesign():
@@ -158,6 +157,8 @@ class EnvironmentDesign():
             print("Started episode 0.")
         observation = self._observe_human(environment=self.base_environment, n_trajectories=1)
         self.all_observations.append(observation)
+
+
         if verbose:
             print("Finished episode 0.")
         self.diagnostics = {}
@@ -179,11 +180,6 @@ class EnvironmentDesign():
                 start_time = datetime.datetime.now()
 
 
-                #TODO min/ max values need to be inferred from ROI. Are inferred but make this cleaner, e.g. "zoom in" on BM.
-                # min_gamma = 0.5
-                # max_gamma = 0.95
-                # min_p = 0.5
-                # max_p = 0.95
                 pos_inference = PosteriorInference(base_environment=self.base_environment,
                                                    expert_trajectories=self.all_observations,
                                                    learn_what=self.learn_what,
@@ -212,7 +208,6 @@ class EnvironmentDesign():
 
 
                 #Get mean reward, transition, gamma according to current belief for implicit differentiation.
-                #TODO here we need to have a cleaner way to convert the parametrization into the actual function.
                 if "R" in self.learn_what:
                     estimate_R = self.base_environment.reward_function(*mean_params[:self.n_params_R])
                 else:
@@ -242,26 +237,19 @@ class EnvironmentDesign():
                                        estimate_gamma = estimate_gamma,
                                        named_parameter_mesh=self._named_parameter_mesh,
                                        shaped_parameter_mesh=self.shaped_parameter_mesh,
-                                    #    gammas = np.linspace(min_gamma, max_gamma, num=15),
-                                    #    probs= np.linspace(min_p, max_p, num=15),
                                        region_of_interest=region_of_interest,
                                        verbose=verbose
                                        )
-                
-                # #World to compute Behavior Map. TODO: this should take arbitrary arguments and not only gamma/p.
-                # _world = Experiment_2D(self.base_environment.N,
-                #                        self.base_environment.M,
-                #                        rewards=estimate_R,
-                #                        absorbing_states=self.base_environment.goal_states,
-                #                        wall_states=self.base_environment.wall_states)
 
-                #Find a reward function that maximizes the entropy of the Behavior Map. TODO: also use transition function. Currently only do gradient updates on R.
+
+                #Find a reward function that maximizes the entropy of the Behavior Map. 
+                #TODO: also use transition function. Currently only do gradient updates on R. Do we want this?
                 updated_reward = entropy_bm.BM_search(base_environment = self.base_environment,
                                                       named_parameter_mesh=self._named_parameter_mesh,
                                                       shaped_parameter_mesh=self.shaped_parameter_mesh,
-                                                      n_compute_BM = 5,
-                                                      n_iterations_gradient=50,
-                                                      stepsize_gradient=0.01)
+                                                      n_compute_BM = 10,
+                                                      n_iterations_gradient=10,
+                                                      stepsize_gradient=0.001)
                                 
                 #Generate an environment in which we observe the human with maximal information gain.
                 optimal_environment = deepcopy(self.base_environment)

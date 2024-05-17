@@ -170,20 +170,24 @@ class EntropyBM():
             # Update the reward function
             for behavior_idx in covers:
 
+                #Get states that are visited by the behavior.
                 cover = covers[behavior_idx]
                 _visited_states = bm_out.pidx2states[behavior_idx]
-                _visited_states = _visited_states[:-1]
 
+                #TODO: think about whether we want the next line or not.
+                # _visited_states = _visited_states[:-1]
+                
+                #Get gradient along those visited states.s
                 _masked_gradient_R = torch.zeros_like(R_grad_out)
                 _masked_gradient_R[_visited_states] = R_grad_out[_visited_states]
 
+
+                #Inhibit behavior that covers more than maximum entropy share.
                 if (cover > max_ent_cover) or (cover == 1):
-                    #Inhibit Behavior.
                     R = R - stepsize * _masked_gradient_R
                     
-
+                #Excite behavior that covers less than maximum entropy share.
                 else:
-                    #Excite Behavior.
                     R = R + stepsize * _masked_gradient_R
 
         return R
@@ -201,6 +205,7 @@ class EntropyBM():
         environment = deepcopy(base_environment)
         R = self.estimate_R
         _max_ent = -np.inf
+        _max_ent_cover = None
         max_ent_R = self.estimate_R
         R_update = np.zeros_like(R)
 
@@ -208,20 +213,24 @@ class EntropyBM():
 
 
             # Compute Behavior Map
-            # bm_out = bm.plot_bmap(world=_world, gammas=self.gammas, probs=self.probs)
             bm_out = bm.calculate_behavior_map(environment=environment,
                                                reward_update=R_update,
                                                parameter_mesh=named_parameter_mesh,
                                                shaped_parameter_mesh=shaped_parameter_mesh)
+            
+            # print("Behavior Map:", bm_out)
 
             #Compute entropy of BM
-            cover, _ = self.compute_covers(bm_out)
+            cover, max_ent_prob = self.compute_covers(bm_out)
             entropy_BM = stats.entropy(list(cover.values()))
+
+            # print("Cover: ", cover)
 
             #Check if the current Behavior Map has higher entropy.
             if entropy_BM > _max_ent:
-                # max_ent_possible = stats.entropy(np.repeat(max_ent_prob, repeats=int(1/max_ent_prob)))
+                max_ent_possible = stats.entropy(np.repeat(max_ent_prob, repeats=int(1/max_ent_prob)))
                 _max_ent = entropy_BM
+                _max_ent_cover = cover
                 max_ent_R = R
 
             # Perform Gradient Updates on Reward Function to maximize entropy of BM.
@@ -231,11 +240,13 @@ class EntropyBM():
             #Update Reward Function
             R = R_update
 
+            # print("Updated reward function: ", R_update)
+
             #Save Reward Function
             # environment.reward_function = R_update.detach().numpy()
 
         if self.verbose:
-            print(f"Finished BM Search. Entropy: {_max_ent}.")
+            print(f"Finished BM Search. Entropy: {_max_ent}. Max Ent possible: {max_ent_possible}. Cover: {_max_ent_cover}.")
 
         return max_ent_R
         
