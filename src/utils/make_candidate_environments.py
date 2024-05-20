@@ -74,29 +74,6 @@ class EntropyBM():
         self.verbose = verbose
 
 
-    #TODO make this pretty, currently only works for 2-dim Behavior Map.
-    #TODO make this vectorized for prettiness 
-    # def compute_bm_ROI(self, behavior_map):
-
-    #     '''
-    #     Compute Behavior Map restricted to Region of Interest.
-
-    #     Args:
-    #     - behavior_map: The Behavior Map. Output of plot_bmap function.
-
-    #     Returns:
-    #     - behavior_ROI (list): The Behavior Map restricted to the Region of Interest.
-    #     '''
-    #     behavior_map_flat = behavior_map.data.flatten()
-
-    #     behavior_ROI = []
-    #     for idx in range(len(behavior_map_flat)):
-    #         if idx in self.region_of_interest:
-    #             behavior_ROI.append(behavior_map_flat[idx])
-
-    #     return behavior_ROI
-
-
     def compute_covers(self, behavior_map):
 
         '''
@@ -170,10 +147,10 @@ class EntropyBM():
                 _masked_gradient_R = torch.zeros_like(R_grad_out)
                 _masked_gradient_R[_visited_states] = R_grad_out[_visited_states]
 
-                print("behavior_idx: ", behavior_idx)
-                print("Cover: ", cover)
-                print("Visited States: ", _visited_states)
-                print("Gradient: ", _masked_gradient_R)
+                # print("behavior_idx: ", behavior_idx)
+                # print("Cover: ", cover)
+                # print("Visited States: ", _visited_states)
+                # print("Gradient: ", _masked_gradient_R)
 
                 #Inhibit behavior that covers more than maximum entropy share.
                 if (cover > max_ent_cover) or (cover == 1):
@@ -203,7 +180,11 @@ class EntropyBM():
         R_entropy_update = np.zeros_like(R)
         region_of_interest = self.region_of_interest
 
-        for _ in range(n_compute_BM):
+        entropy_maximized: bool = False
+        n_iterations = 0
+
+        # for _ in range(n_compute_BM):
+        while not entropy_maximized:
 
 
             # Compute Behavior Map
@@ -241,10 +222,21 @@ class EntropyBM():
             #Save Reward Function
             # environment.reward_function = R_update.detach().numpy()
 
+            #Check if the entropy of the Behavior Map has been maximized.
+            if (np.isclose(_max_ent, max_ent_possible, atol = 0.01)) and max_ent_possible != 0:
+                entropy_maximized = True
+
+            n_iterations += 1
+
+            if n_iterations > n_compute_BM:
+                print("\n\nReached Maximum Number of BM Computations. Terminating BM Search.\n\n")
+                break
+
         if self.verbose:
             print(f"Finished BM Search. Entropy: {_max_ent}. Max Ent possible: {max_ent_possible}. Cover: {_max_ent_cover}. Behaviors: {bm_out.pidx2states}")
             print("Behavior map: ", _max_ent_BM)
             print("Reward Function: ", max_ent_R)
+
         return max_ent_R
         
 
