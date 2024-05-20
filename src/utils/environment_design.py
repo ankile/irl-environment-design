@@ -299,7 +299,7 @@ class EnvironmentDesign():
                 del candidate_environments_sorted
             
             #Observe human in environment. Append observation to all observations.
-            observation = self._observe_human(environment=optimal_environment,n_trajectories=1)
+            observation = self._observe_human(environment=optimal_environment,n_trajectories=1, mean_reward_estimate=estimate_R)
             self.all_observations.append(observation)
 
             del observation
@@ -411,7 +411,8 @@ class EnvironmentDesign():
 
     def _observe_human(self,
                       environment: Environment,
-                      n_trajectories: int=1):
+                      n_trajectories: int=1,
+                      mean_reward_estimate = None):
         
         '''
         Observe human in an environment n_trajectories times.
@@ -428,12 +429,26 @@ class EnvironmentDesign():
         # T_agent = insert_walls_into_T(T=T_agent, wall_indices=environment.wall_states)
         
         # _reward_function = environment.reward_function(*self.user_params.R) + environment.max_ent_reward
-        _reward_function = environment.max_ent_reward
+
+        #Here, we need to disentangle the maximum entropy reward function. The maximum entropy reward function
+        #is the sum of the mean reward given our belief plus the maximum entropy share. We subtract the mean reward share and add the human's reward function
+        #to observe the human with their reward function (plus the maximum entropy part). 
+        if mean_reward_estimate is not None:
+            # print("Disentagle reward function")
+            # print("Mean reward estimate: ", mean_reward_estimate)
+            # print("Max Entropy Reward: ", environment.max_ent_reward)
+            # print("True Reward: ", environment.reward_function(*self.user_params.R))
+            _reward_function = environment.max_ent_reward
+            _reward_function -= mean_reward_estimate
+            _reward_function += environment.reward_function(*self.user_params.R)
+        else:
+            #First iteration, observe in base environment.
+            _reward_function = environment.reward_function(*self.user_params.R)
 
         _transition_function = environment.transition_function(*self.user_params.T)
         _gamma = environment.gamma(*self.user_params.gamma)
 
-        print("Observing human in reward function: ", _reward_function)
+        # print("Observing human in reward function: ", _reward_function)
 
         agent_policy = soft_q_iteration(_reward_function, _transition_function, _gamma, beta=beta_agent)
 

@@ -68,8 +68,6 @@ class EntropyBM():
         self.estimate_gamma = estimate_gamma
         self.estimate_T = estimate_T
 
-        # self.gammas = gammas
-        # self.probs = probs
         self.named_parameter_mesh = named_parameter_mesh
         self.shaped_parameter_mesh = shaped_parameter_mesh
         self.region_of_interest = region_of_interest
@@ -78,25 +76,25 @@ class EntropyBM():
 
     #TODO make this pretty, currently only works for 2-dim Behavior Map.
     #TODO make this vectorized for prettiness 
-    def compute_bm_ROI(self, behavior_map):
+    # def compute_bm_ROI(self, behavior_map):
 
-        '''
-        Compute Behavior Map restricted to Region of Interest.
+    #     '''
+    #     Compute Behavior Map restricted to Region of Interest.
 
-        Args:
-        - behavior_map: The Behavior Map. Output of plot_bmap function.
+    #     Args:
+    #     - behavior_map: The Behavior Map. Output of plot_bmap function.
 
-        Returns:
-        - behavior_ROI (list): The Behavior Map restricted to the Region of Interest.
-        '''
-        behavior_map_flat = behavior_map.data.flatten()
+    #     Returns:
+    #     - behavior_ROI (list): The Behavior Map restricted to the Region of Interest.
+    #     '''
+    #     behavior_map_flat = behavior_map.data.flatten()
 
-        behavior_ROI = []
-        for idx in range(len(behavior_map_flat)):
-            if idx in self.region_of_interest:
-                behavior_ROI.append(behavior_map_flat[idx])
+    #     behavior_ROI = []
+    #     for idx in range(len(behavior_map_flat)):
+    #         if idx in self.region_of_interest:
+    #             behavior_ROI.append(behavior_map_flat[idx])
 
-        return behavior_ROI
+    #     return behavior_ROI
 
 
     def compute_covers(self, behavior_map):
@@ -113,7 +111,9 @@ class EntropyBM():
         '''
 
         #Compute Behavior Map restricted to Region of Interest.
-        behavior_ROI = self.compute_bm_ROI(behavior_map)
+        # behavior_ROI = self.compute_bm_ROI(behavior_map)
+
+        behavior_ROI = behavior_map.data.flatten()
 
         _behaviors = np.unique(behavior_ROI)
         n_behavior_samples = len(behavior_ROI)
@@ -150,17 +150,7 @@ class EntropyBM():
         T = torch.tensor(self.estimate_T, dtype=torch.float32)
         V_star = torch.zeros_like(R)
 
-        # print("R: ", R)
-        # print("T: ", T)
-        # print("V_star: ", V_star)
-        # print("gamma: ", gamma)
-
-        # print("R.shape: ", R.shape)
-        # print("T.shape: ", T.shape)
-        # print("V_star.shape: ", V_star.shape)
-        
-
-        for _idx in range(n_iterations):
+        for _ in range(n_iterations):
 
 
             # Compute the gradient of the value function with respect to the reward function and the transition matrix.
@@ -180,20 +170,18 @@ class EntropyBM():
                 _masked_gradient_R = torch.zeros_like(R_grad_out)
                 _masked_gradient_R[_visited_states] = R_grad_out[_visited_states]
 
+                print("behavior_idx: ", behavior_idx)
+                print("Cover: ", cover)
+                print("Visited States: ", _visited_states)
+                print("Gradient: ", _masked_gradient_R)
 
                 #Inhibit behavior that covers more than maximum entropy share.
                 if (cover > max_ent_cover) or (cover == 1):
                     R = R - stepsize * _masked_gradient_R
 
-                    # if _idx==n_iterations-1:
-                    #     print(f"Inhibited behavior. Masked gradient R: {_masked_gradient_R}. Cover: {cover}.")
-                    
                 #Excite behavior that covers less than maximum entropy share.
                 else:
                     R = R + stepsize * _masked_gradient_R
-
-                    # if _idx==n_iterations-1:
-                        # print(f"Excited behavior. Masked gradient R: {_masked_gradient_R}. Cover: {cover}.")
 
         return R
     
@@ -212,16 +200,18 @@ class EntropyBM():
         _max_ent = -np.inf
         _max_ent_cover = None
         max_ent_R = self.estimate_R
-        R_update = np.zeros_like(R)
+        R_entropy_update = np.zeros_like(R)
+        region_of_interest = self.region_of_interest
 
         for _ in range(n_compute_BM):
 
 
             # Compute Behavior Map
             bm_out = bm.calculate_behavior_map(environment=environment,
-                                               reward_update=R_update,
+                                               reward_update=R_entropy_update,
                                                parameter_mesh=named_parameter_mesh,
-                                               shaped_parameter_mesh=shaped_parameter_mesh)
+                                               shaped_parameter_mesh=shaped_parameter_mesh,
+                                               region_of_interest = region_of_interest)
             
             # print("Behavior Map:", bm_out)
 
@@ -241,11 +231,11 @@ class EntropyBM():
 
             # Perform Gradient Updates on Reward Function to maximize entropy of BM.
             # print("\nUpdating Reward Function\n")
-            R_update = self.gradient_updates_R(R_init = R, bm_out=bm_out, stepsize=stepsize_gradient, n_iterations=n_iterations_gradient)
-            R_update = R_update.detach().numpy()
+            R_entropy_update = self.gradient_updates_R(R_init = R, bm_out=bm_out, stepsize=stepsize_gradient, n_iterations=n_iterations_gradient)
+            R_entropy_update = R_entropy_update.detach().numpy()
 
             #Update Reward Function
-            R = R_update
+            R = R_entropy_update
 
             #TODO: should we save the previous maximum entropy reward function for the next iteration to warm start?
             #Save Reward Function
