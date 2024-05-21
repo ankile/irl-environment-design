@@ -59,9 +59,8 @@ class EntropyBM():
                  estimate_T, 
                  named_parameter_mesh,
                  shaped_parameter_mesh,
-                #  gammas, 
-                #  probs, 
                  region_of_interest,
+                 reward_init,
                  verbose) -> None:
 
         self.estimate_R = estimate_R
@@ -72,6 +71,7 @@ class EntropyBM():
         self.shaped_parameter_mesh = shaped_parameter_mesh
         self.region_of_interest = region_of_interest
         self.verbose = verbose
+        self.reward_init = reward_init
 
 
     def compute_covers(self, behavior_map):
@@ -173,7 +173,12 @@ class EntropyBM():
         '''
 
         environment = deepcopy(base_environment)
-        R = self.estimate_R
+        if self.reward_init is None:
+            R = self.estimate_R
+        else:
+            R = self.reward_init
+
+        print("Initialized Reward Function R:", R)
         _max_ent = -np.inf
         _max_ent_cover = None
         max_ent_R = self.estimate_R
@@ -194,13 +199,13 @@ class EntropyBM():
                                                shaped_parameter_mesh=shaped_parameter_mesh,
                                                region_of_interest = region_of_interest)
             
-            # print("Behavior Map:", bm_out)
+            print("Behavior Map:", bm_out)
 
             #Compute entropy of BM
             cover, max_ent_prob = self.compute_covers(bm_out)
             entropy_BM = stats.entropy(list(cover.values()))
 
-            # print("Cover: ", cover)
+            print("Cover: ", cover)
 
             #Check if the current Behavior Map has higher entropy.
             if entropy_BM > _max_ent:
@@ -218,10 +223,6 @@ class EntropyBM():
             #Update Reward Function
             R = R_entropy_update
 
-            #TODO: should we save the previous maximum entropy reward function for the next iteration to warm start?
-            #Save Reward Function
-            # environment.reward_function = R_update.detach().numpy()
-
             #Check if the entropy of the Behavior Map has been maximized.
             if (np.isclose(_max_ent, max_ent_possible, atol = 0.01)) and max_ent_possible != 0:
                 entropy_maximized = True
@@ -231,6 +232,9 @@ class EntropyBM():
             if n_iterations > n_compute_BM:
                 print("\n\nReached Maximum Number of BM Computations. Terminating BM Search.\n\n")
                 break
+
+            print("Iteration: ", n_iterations)
+            print("Reward Function: ", R)
 
         if self.verbose:
             print(f"Finished BM Search. Entropy: {_max_ent}. Max Ent possible: {max_ent_possible}. Cover: {_max_ent_cover}. Behaviors: {bm_out.pidx2states}")

@@ -51,12 +51,20 @@ def expert_trajectory_log_likelihood(
         # assert env.goal_states is not None, "Add goal states to environment."
         # T_agent = transition_matrix(env.N, env.M, p=parameter_sample.p, absorbing_states=env.goal_states)
         # T_agent = insert_walls_into_T(T_agent, wall_indices=env.wall_states) #this is new
+
+        #Add maximum entropy reward update.
+        # print("env.max_ent_reward: ", env.max_ent_reward)
+        # print("reward_function: ", reward_function)
+        reward_function = reward_function + env.max_ent_reward
+        # print("reward_function after adding max_ent_reward: ", reward_function)
+
         policy, Q, V = soft_q_iteration(
             reward_function, transition_function, gamma=gamma, beta=beta_agent, return_what="all", Q_init=Q, V_init=V, policy_init=policy
         )
         for traj in trajectories:
             len_traj = len(traj)
             log_likelihood += compute_log_likelihood(transition_function, policy, traj)/len_traj #TODO: which T here? env.T_true or T_agent?
+
     if log_likelihood == -np.inf:
         print("log likelihood is negative infinity. sth is weird.")
 

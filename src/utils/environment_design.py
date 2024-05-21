@@ -47,6 +47,8 @@ class EnvironmentDesign():
         self.all_observations = []
         self.learn_what = learn_what
 
+        self.base_environment.user_params = user_params
+
 
         #Check whether we have both custom functions and parameter ranges for what we want to learn. For function we don't want to learn, we use the true functions.
         if "R" in learn_what:
@@ -172,6 +174,7 @@ class EnvironmentDesign():
         self.diagnostics["runtime_secs"] = []
 
         region_of_interest = None
+        updated_reward = None
 
         for episode in range(1,self.episodes):
         
@@ -243,6 +246,7 @@ class EnvironmentDesign():
                                        named_parameter_mesh=self._named_parameter_mesh,
                                        shaped_parameter_mesh=self.shaped_parameter_mesh,
                                        region_of_interest=region_of_interest,
+                                       reward_init = updated_reward,
                                        verbose=verbose
                                        )
 

@@ -18,7 +18,6 @@ def calculate_behavior_map(
     environment: Environment,
     reward_update: np.ndarray,
     parameter_mesh,
-    shaped_parameter_mesh,
     region_of_interest: np.ndarray,
 ) -> ExperimentResult:
     """
