@@ -184,6 +184,7 @@ class EnvironmentDesign():
 
         region_of_interest = None
         updated_reward = None
+        confidence_interval = 0.8
 
 
         #Check if inputs are valid.
@@ -217,7 +218,6 @@ class EnvironmentDesign():
                 '''
                 Conventional Bayesian IRL. Compute posterior distribution, mean and Region of Interest.
                 '''
-
                 pos_inference = PosteriorInference(base_environment=self.base_environment,
                                                    expert_trajectories=self.all_observations,
                                                    learn_what=self.learn_what,
@@ -234,7 +234,7 @@ class EnvironmentDesign():
                 if verbose:
                     print("Mean Parameters:", mean_params)
 
-                region_of_interest = pos_inference.calculate_region_of_interest(log_likelihood = current_belief, confidence_interval=0.8)
+                region_of_interest = pos_inference.calculate_region_of_interest(log_likelihood = current_belief, confidence_interval=confidence_interval)
                 self.diagnostics["region_of_interests"].append(region_of_interest)
 
                 _ROI_size = round(region_of_interest.size/current_belief.size, 2)
@@ -244,7 +244,8 @@ class EnvironmentDesign():
                 del _ROI_size
                 del current_belief
 
-                break        
+                #Observe the human in base environment.
+                optimal_environment = self.base_environment
 
             elif candidate_environments_args["generate_how"] == "AMBER":
 
@@ -273,7 +274,7 @@ class EnvironmentDesign():
                 if verbose:
                     print("Mean Parameters:", mean_params)
 
-                region_of_interest = pos_inference.calculate_region_of_interest(log_likelihood = current_belief, confidence_interval=0.8)
+                region_of_interest = pos_inference.calculate_region_of_interest(log_likelihood = current_belief, confidence_interval=confidence_interval)
                 self.diagnostics["region_of_interests"].append(region_of_interest)
 
                 _ROI_size = round(region_of_interest.size/current_belief.size, 2)
@@ -399,7 +400,7 @@ class EnvironmentDesign():
                 if verbose:
                     print("Mean Parameters:", mean_params)
 
-                region_of_interest = pos_inference.calculate_region_of_interest(log_likelihood = current_belief, confidence_interval=0.8)
+                region_of_interest = pos_inference.calculate_region_of_interest(log_likelihood = current_belief, confidence_interval=confidence_interval)
                 self.diagnostics["region_of_interests"].append(region_of_interest)
 
                 _ROI_size = round(region_of_interest.size/current_belief.size, 2)
@@ -436,7 +437,7 @@ class EnvironmentDesign():
                 if verbose:
                     print("Mean Parameters:", mean_params)
 
-                region_of_interest = pos_inference.calculate_region_of_interest(log_likelihood = current_belief, confidence_interval=0.8)
+                region_of_interest = pos_inference.calculate_region_of_interest(log_likelihood = current_belief, confidence_interval=confidence_interval)
                 self.diagnostics["region_of_interests"].append(region_of_interest)
 
                 _ROI_size = round(region_of_interest.size/current_belief.size, 2)
@@ -641,7 +642,7 @@ class EnvironmentDesign():
         - tuple of (Environment, trajectories)
         '''         
 
-        if self.candidate_environments_args["generate_how"] == "ED-BIRL":
+        if self.candidate_environments_args["generate_how"] in ["BIRL", "ED-BIRL"]:
             _reward_function = environment.R_true
             _transition_function = environment.T_true
             _gamma = environment.gamma_true
@@ -652,7 +653,6 @@ class EnvironmentDesign():
             _gamma = environment.gamma(*self.user_params.gamma)
             if "R" not in self.learn_what:
                 _reward_function = environment.max_ent_reward
-                print("_reward_function", _reward_function)
             else:
                 raise NotImplementedError('Currently learning R is not supported.')
 

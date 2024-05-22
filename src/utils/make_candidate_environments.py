@@ -161,7 +161,6 @@ class EntropyBM():
                     else:
                         R = R + how_args["stepsize"] * _masked_gradient_R
 
-                    R = R.detach().numpy()
 
                 elif update_how == "random":
 
@@ -170,6 +169,10 @@ class EntropyBM():
                     
                     else:
                         R = self.change_reward_randomly(states = _visited_states, what = "excite", reward_function = R, stepsize = how_args["stepsize"])
+
+            if update_how == "gradient":
+                R = R.detach().numpy()
+
 
         return R
     
@@ -201,7 +204,7 @@ class EntropyBM():
 
         if what == "excite":
             reward_function[random_state] += stepsize*np.random.uniform(low = random_reward_ranges_min, high = random_reward_ranges_max)
-        elif what == "inhibit":
+        elif what == "random":
             reward_function[random_state] -= stepsize*np.random.uniform(low = random_reward_ranges_min, high = random_reward_ranges_max)
 
         return reward_function
@@ -272,18 +275,18 @@ class EntropyBM():
 
             # Perform Gradient Updates on Reward Function to maximize entropy of BM.
             if search_how == "gradient":
-                max_ent_R = self.update_R(R_init = R, bm_out=bm_out, update_how = "gradient", how_args = candidate_environment_args)
+                R_entropy_update = self.update_R(R_init = R, bm_out=bm_out, update_how = "gradient", how_args = candidate_environment_args)
 
 
             # Randomly change reward function along rollout of policy.
             elif search_how == "random":
-                max_ent_R = self.update_R(R_init = R, bm_out=bm_out, update_how = "random", how_args = candidate_environment_args)
+                R_entropy_update = self.update_R(R_init = R, bm_out=bm_out, update_how = "random", how_args = candidate_environment_args)
 
-            #Maximum Entropy Reward update:
-            R_entropy_update = max_ent_R
-            
+            #Update reward function
+            R = R_entropy_update
+
             #Check if the entropy of the Behavior Map has been maximized.
-            if (np.isclose(_max_ent, max_ent_possible, rtol = 0.001)) and max_ent_possible != 0:
+            if (np.isclose(_max_ent, max_ent_possible, rtol = 0.01)) and max_ent_possible != 0:
                 entropy_maximized = True
 
             n_iterations += 1
@@ -312,191 +315,191 @@ class EntropyBM():
         
 
 
-class AgnosticsBM():
+# class AgnosticsBM():
 
-    '''
-    Calculate the Behavior Map of an environment and perturb the environment such that the dominant policy becomes less attractive 
-    and the subdominant policies become more attractive.
-    '''
+#     '''
+#     Calculate the Behavior Map of an environment and perturb the environment such that the dominant policy becomes less attractive 
+#     and the subdominant policies become more attractive.
+#     '''
 
-    def __init__(self, 
-                 environment,
-                 behavior_map_environment,
-                 region_of_interest=None):
+#     def __init__(self, 
+#                  environment,
+#                  behavior_map_environment,
+#                  region_of_interest=None):
         
-        self.environment = environment
-        self.perturbed_environment = deepcopy(self.environment)
-        self.region_of_interest  = region_of_interest
-        self.behavior_map_base_environment = behavior_map_environment
-        self.behavior_map_perturbed_environment = None
-        self.prop_dominant_policy = []
-        self.prop_subdominant_policy = []
-        self.prop_unreasonable_policy = []
-        self.perturbed_environments = {}
-        self.perturbed_behavior_maps = {}
-        self.n_accepted = 0
+#         self.environment = environment
+#         self.perturbed_environment = deepcopy(self.environment)
+#         self.region_of_interest  = region_of_interest
+#         self.behavior_map_base_environment = behavior_map_environment
+#         self.behavior_map_perturbed_environment = None
+#         self.prop_dominant_policy = []
+#         self.prop_subdominant_policy = []
+#         self.prop_unreasonable_policy = []
+#         self.perturbed_environments = {}
+#         self.perturbed_behavior_maps = {}
+#         self.n_accepted = 0
 
-    def calculate_behavior_map_stats(self, behavior_map):
+#     def calculate_behavior_map_stats(self, behavior_map):
 
-        '''
-        Determine reasonable, unreasonable and dominant policies in the behavior map.
-        '''
+#         '''
+#         Determine reasonable, unreasonable and dominant policies in the behavior map.
+#         '''
 
-        #Reasonable policies are all policies that don't stay in the start state. Unreasonable policies stay in the start state.
-        reasonable_policies_idx = [p for p, states in behavior_map.pidx2states.items() if states[-1] in self.environment.goal_states]
-        unreasonable_policies_idx = [p for p, states in behavior_map.pidx2states.items() if states[-1] not in self.environment.goal_states]
+#         #Reasonable policies are all policies that don't stay in the start state. Unreasonable policies stay in the start state.
+#         reasonable_policies_idx = [p for p, states in behavior_map.pidx2states.items() if states[-1] in self.environment.goal_states]
+#         unreasonable_policies_idx = [p for p, states in behavior_map.pidx2states.items() if states[-1] not in self.environment.goal_states]
 
-        #Number of different policies.
-        behaviors_flattened = behavior_map.data.flatten()
-        #Only get behaviors in Region of interest.
-        if self.region_of_interest is not None:
+#         #Number of different policies.
+#         behaviors_flattened = behavior_map.data.flatten()
+#         #Only get behaviors in Region of interest.
+#         if self.region_of_interest is not None:
             
-            behaviors_flattened = behavior_map.data[tuple(self.region_of_interest.T)]
-        n_behaviors = len(behaviors_flattened)
+#             behaviors_flattened = behavior_map.data[tuple(self.region_of_interest.T)]
+#         n_behaviors = len(behaviors_flattened)
 
-        if self.region_of_interest is not None:
-            assert n_behaviors == self.region_of_interest.shape[0], "The number of behaviors in the region of interest does not match the number of behaviors in the behavior map."
+#         if self.region_of_interest is not None:
+#             assert n_behaviors == self.region_of_interest.shape[0], "The number of behaviors in the region of interest does not match the number of behaviors in the behavior map."
 
-        #Number of reasonable policies.
-        n_reasonable_behaviors = np.sum(np.isin(behaviors_flattened, reasonable_policies_idx))
-        n_unreasonable_behaviors = np.sum(np.isin(behaviors_flattened, unreasonable_policies_idx))
+#         #Number of reasonable policies.
+#         n_reasonable_behaviors = np.sum(np.isin(behaviors_flattened, reasonable_policies_idx))
+#         n_unreasonable_behaviors = np.sum(np.isin(behaviors_flattened, unreasonable_policies_idx))
 
-        #Count the number of times each policy is chosen.
-        behavior, counts = np.unique(behaviors_flattened, return_counts=True)
-        behavior_counts = dict(zip(behavior, counts))
+#         #Count the number of times each policy is chosen.
+#         behavior, counts = np.unique(behaviors_flattened, return_counts=True)
+#         behavior_counts = dict(zip(behavior, counts))
 
-        #Dominant policy is the policy with the most counts, e.g. that covers the largest proportion of the Behavior Map.
-        # Remove all unreasonable policies from the counts.
-        for unreasonable_policy in unreasonable_policies_idx:
-            behavior_counts.pop(unreasonable_policy, None)
+#         #Dominant policy is the policy with the most counts, e.g. that covers the largest proportion of the Behavior Map.
+#         # Remove all unreasonable policies from the counts.
+#         for unreasonable_policy in unreasonable_policies_idx:
+#             behavior_counts.pop(unreasonable_policy, None)
 
-        #Get the dominant policy. If there are only unreasonable policies (e.g. behavior counts ie empty), then the dominant policy is None.
-        if behavior_counts == {}:
-            dominant_policy = None
-            return 0, 0, 1, None
-        else:
-            dominant_policy = max(behavior_counts, key=behavior_counts.get)
+#         #Get the dominant policy. If there are only unreasonable policies (e.g. behavior counts ie empty), then the dominant policy is None.
+#         if behavior_counts == {}:
+#             dominant_policy = None
+#             return 0, 0, 1, None
+#         else:
+#             dominant_policy = max(behavior_counts, key=behavior_counts.get)
 
-        #Subdominant policies are all policies that are a) not dominant and b) not unreasonable.
-        n_dominant_behaviors = behavior_counts[dominant_policy]
-        n_subdominant_behaviors = n_reasonable_behaviors - n_dominant_behaviors
+#         #Subdominant policies are all policies that are a) not dominant and b) not unreasonable.
+#         n_dominant_behaviors = behavior_counts[dominant_policy]
+#         n_subdominant_behaviors = n_reasonable_behaviors - n_dominant_behaviors
 
-        #Determine proportion of BM that each policy type covers.
-        prop_dominant_policy = n_dominant_behaviors / n_behaviors
-        prop_subdominant_policy = n_subdominant_behaviors / n_behaviors
-        prop_unreasonable_policy = n_unreasonable_behaviors / n_behaviors
+#         #Determine proportion of BM that each policy type covers.
+#         prop_dominant_policy = n_dominant_behaviors / n_behaviors
+#         prop_subdominant_policy = n_subdominant_behaviors / n_behaviors
+#         prop_unreasonable_policy = n_unreasonable_behaviors / n_behaviors
 
-        #Get a rollout of the dominant policy.
-        dominant_states = behavior_map.pidx2states[dominant_policy]
+#         #Get a rollout of the dominant policy.
+#         dominant_states = behavior_map.pidx2states[dominant_policy]
 
-        return prop_dominant_policy, prop_subdominant_policy, prop_unreasonable_policy, dominant_states
+#         return prop_dominant_policy, prop_subdominant_policy, prop_unreasonable_policy, dominant_states
 
-    def perturb_transition_dynamics(self, states):
+#     def perturb_transition_dynamics(self, states):
 
-        '''
-        We want to change the transition dynamics, such that prop_dominant_policy decreases and prop_subdominant_policy increases while prop
-        _unreasonable_policy remains small.
-        We can do this by changing the reward function and transition dynamics such that the dominant policy becomes less attractive and the subdominant
-        poicies become more attractive. To this end, we insert walls/ death states along the rollouts of the dominant policy and remove walls/death states
-        from the rollouts of the subdominant policies. This will make the dominant policy less attractive and the subdominant policies more attractive.
-        '''
-        #Get a random state from the dominant policy to insert a wall into. Remove goal states and start state.
-        random_state_from_dominant = np.random.choice(list(states), size = 1)
-        random_state_from_dominant = np.setdiff1d(random_state_from_dominant, self.environment.goal_states)
-        #TODO: start state should be flexible, not 0.
-        random_state_from_dominant = np.setdiff1d(random_state_from_dominant, [0])
+#         '''
+#         We want to change the transition dynamics, such that prop_dominant_policy decreases and prop_subdominant_policy increases while prop
+#         _unreasonable_policy remains small.
+#         We can do this by changing the reward function and transition dynamics such that the dominant policy becomes less attractive and the subdominant
+#         poicies become more attractive. To this end, we insert walls/ death states along the rollouts of the dominant policy and remove walls/death states
+#         from the rollouts of the subdominant policies. This will make the dominant policy less attractive and the subdominant policies more attractive.
+#         '''
+#         #Get a random state from the dominant policy to insert a wall into. Remove goal states and start state.
+#         random_state_from_dominant = np.random.choice(list(states), size = 1)
+#         random_state_from_dominant = np.setdiff1d(random_state_from_dominant, self.environment.goal_states)
+#         #TODO: start state should be flexible, not 0.
+#         random_state_from_dominant = np.setdiff1d(random_state_from_dominant, [0])
 
-        #Insert walls into the transition matrix along the rollouts of the dominant policy and update transition function.
-        T_new = insert_walls_into_T(T=self.perturbed_environment.T_true, wall_indices=random_state_from_dominant)
-        self.perturbed_environment.wall_states = np.append(self.perturbed_environment.wall_states, random_state_from_dominant)
-        self.perturbed_environment.T_true = T_new
-        print(f"Perturbed transition dynamics. Inserted a wall into state {random_state_from_dominant}.")
-
-    
-    def perturb_reward_function(self, states):
-
-        '''
-        Change reward function along dominant rollout of dominant.
-        '''
-        #Get a random state from the dominant policy to insert a wall into. Remove goal states and start state.
-        random_state_from_dominant = np.random.choice(list(states), size = 1)
-        random_state_from_dominant = np.setdiff1d(random_state_from_dominant, self.environment.goal_states)
-        #TODO: start state should be flexible, not 0.
-        random_state_from_dominant = np.setdiff1d(random_state_from_dominant, [0])
-        #Insert negative reward into the transition matrix along the rollouts of the dominant policy.
-        R_new = self.perturbed_environment.R_true.copy()
-        R_new[random_state_from_dominant] += -0.1
-
-        self.perturbed_environment.R_true = R_new
-        print(f"Perturbed reward function. Inserted a negative reward into state {random_state_from_dominant}.")
+#         #Insert walls into the transition matrix along the rollouts of the dominant policy and update transition function.
+#         T_new = insert_walls_into_T(T=self.perturbed_environment.T_true, wall_indices=random_state_from_dominant)
+#         self.perturbed_environment.wall_states = np.append(self.perturbed_environment.wall_states, random_state_from_dominant)
+#         self.perturbed_environment.T_true = T_new
+#         print(f"Perturbed transition dynamics. Inserted a wall into state {random_state_from_dominant}.")
 
     
-    def perturb_environment(self, n_iterations: int,
-                            plot_bmap: bool = False,):
+#     def perturb_reward_function(self, states):
 
-        '''
-        Perturb the environment such that the dominant policy becomes less attractive and the subdominant policies become more attractive.
-        '''
+#         '''
+#         Change reward function along dominant rollout of dominant.
+#         '''
+#         #Get a random state from the dominant policy to insert a wall into. Remove goal states and start state.
+#         random_state_from_dominant = np.random.choice(list(states), size = 1)
+#         random_state_from_dominant = np.setdiff1d(random_state_from_dominant, self.environment.goal_states)
+#         #TODO: start state should be flexible, not 0.
+#         random_state_from_dominant = np.setdiff1d(random_state_from_dominant, [0])
+#         #Insert negative reward into the transition matrix along the rollouts of the dominant policy.
+#         R_new = self.perturbed_environment.R_true.copy()
+#         R_new[random_state_from_dominant] += -0.1
 
-        #Statistics of Base Environment.
-        prop_dominant_policy, prop_subdominant_policy, prop_unreasonable_policy, dominant_states = self.calculate_behavior_map_stats(behavior_map=self.behavior_map_base_environment)
-        self.prop_dominant_policy.append(prop_dominant_policy)
-        self.prop_subdominant_policy.append(prop_subdominant_policy)
-        self.prop_unreasonable_policy.append(prop_unreasonable_policy)
+#         self.perturbed_environment.R_true = R_new
+#         print(f"Perturbed reward function. Inserted a negative reward into state {random_state_from_dominant}.")
 
-        prev_prop_dominant_policy = prop_dominant_policy
-        prev_prop_subdominant_policy = prop_subdominant_policy
-        prev_prop_unreasonable_policy = prop_unreasonable_policy
+    
+#     def perturb_environment(self, n_iterations: int,
+#                             plot_bmap: bool = False,):
+
+#         '''
+#         Perturb the environment such that the dominant policy becomes less attractive and the subdominant policies become more attractive.
+#         '''
+
+#         #Statistics of Base Environment.
+#         prop_dominant_policy, prop_subdominant_policy, prop_unreasonable_policy, dominant_states = self.calculate_behavior_map_stats(behavior_map=self.behavior_map_base_environment)
+#         self.prop_dominant_policy.append(prop_dominant_policy)
+#         self.prop_subdominant_policy.append(prop_subdominant_policy)
+#         self.prop_unreasonable_policy.append(prop_unreasonable_policy)
+
+#         prev_prop_dominant_policy = prop_dominant_policy
+#         prev_prop_subdominant_policy = prop_subdominant_policy
+#         prev_prop_unreasonable_policy = prop_unreasonable_policy
 
         
-        for iteration in range(n_iterations):
+#         for iteration in range(n_iterations):
 
-            #Calculate statistics of current behavior map, e.g. what is the dominant policy, how much of the Behavior Map is covered
-            #by the dominant policy, how much of the Behavior Map is covered by unreasonable policies.
+#             #Calculate statistics of current behavior map, e.g. what is the dominant policy, how much of the Behavior Map is covered
+#             #by the dominant policy, how much of the Behavior Map is covered by unreasonable policies.
 
-            #Perturb the reward function.
-            self.perturb_reward_function(dominant_states)
+#             #Perturb the reward function.
+#             self.perturb_reward_function(dominant_states)
 
-            #Perturb the transition function. Only insert wall 30% of the time.
-            theta = np.random.uniform(0, 1)
-            if theta < 0.3:
-                self.perturb_transition_dynamics(dominant_states)
+#             #Perturb the transition function. Only insert wall 30% of the time.
+#             theta = np.random.uniform(0, 1)
+#             if theta < 0.3:
+#                 self.perturb_transition_dynamics(dominant_states)
 
-            #Generate new Behavior Map.
-            behavior_map_perturbed_environment = self.generate_behavior_map(plot_bmap=plot_bmap)
+#             #Generate new Behavior Map.
+#             behavior_map_perturbed_environment = self.generate_behavior_map(plot_bmap=plot_bmap)
 
-            #Calculate statistics of new behavior map.
-            prop_dominant_policy, prop_subdominant_policy, prop_unreasonable_policy, dominant_states = self.calculate_behavior_map_stats(
-                                                                                                        behavior_map=behavior_map_perturbed_environment)
+#             #Calculate statistics of new behavior map.
+#             prop_dominant_policy, prop_subdominant_policy, prop_unreasonable_policy, dominant_states = self.calculate_behavior_map_stats(
+#                                                                                                         behavior_map=behavior_map_perturbed_environment)
 
-            if (prop_subdominant_policy - prop_dominant_policy)/prop_unreasonable_policy > (prev_prop_subdominant_policy - prev_prop_dominant_policy)/prev_prop_unreasonable_policy:
-                #Accept this environment.
+#             if (prop_subdominant_policy - prop_dominant_policy)/prop_unreasonable_policy > (prev_prop_subdominant_policy - prev_prop_dominant_policy)/prev_prop_unreasonable_policy:
+#                 #Accept this environment.
 
-                #Append statistics to list.
-                print("Accepted Environment.")
-                self.prop_dominant_policy.append(prop_dominant_policy)
-                self.prop_subdominant_policy.append(prop_subdominant_policy)
-                self.prop_unreasonable_policy.append(prop_unreasonable_policy)
+#                 #Append statistics to list.
+#                 print("Accepted Environment.")
+#                 self.prop_dominant_policy.append(prop_dominant_policy)
+#                 self.prop_subdominant_policy.append(prop_subdominant_policy)
+#                 self.prop_unreasonable_policy.append(prop_unreasonable_policy)
 
-                #Store perturbed environment.
-                self.perturbed_environments[f"iteration_{iteration}"] = self.perturbed_environment
-                self.perturbed_behavior_maps[f"iteration_{iteration}"] = behavior_map_perturbed_environment
+#                 #Store perturbed environment.
+#                 self.perturbed_environments[f"iteration_{iteration}"] = self.perturbed_environment
+#                 self.perturbed_behavior_maps[f"iteration_{iteration}"] = behavior_map_perturbed_environment
 
-                #Update previous statistics.
-                prev_prop_dominant_policy = prop_dominant_policy
-                prev_prop_subdominant_policy = prop_subdominant_policy
-                prev_prop_unreasonable_policy = prop_unreasonable_policy
+#                 #Update previous statistics.
+#                 prev_prop_dominant_policy = prop_dominant_policy
+#                 prev_prop_subdominant_policy = prop_subdominant_policy
+#                 prev_prop_unreasonable_policy = prop_unreasonable_policy
 
-                self.n_accepted += 1
+#                 self.n_accepted += 1
 
-            else:
-                #Reject this environment. Reset the environment to the previous environment.
-                print("Rejected Environment.")
-                pass
+#             else:
+#                 #Reject this environment. Reset the environment to the previous environment.
+#                 print("Rejected Environment.")
+#                 pass
 
-            if prop_dominant_policy == 0:
-                print(f"Terminating perturbation. Dominant policy has been removed.")
-                break
+#             if prop_dominant_policy == 0:
+#                 print(f"Terminating perturbation. Dominant policy has been removed.")
+#                 break
 
 
     # def generate_behavior_map(self,
