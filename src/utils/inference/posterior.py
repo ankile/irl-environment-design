@@ -276,28 +276,53 @@ class   PosteriorInference():
 
     def mean(self,
              episode:int = None,
-             posterior_dist: np.array = None):
+             posterior_dist: np.array = None,
+             parameter_mesh: np.ndarray = None):
 
         assert (episode is not None) or (posterior_dist is not None), f"Supply either episode to calculate mean for or supply posterior distribution." 
 
-        if episode is not None:
-            self._validate_episode(episode=episode)
+        # if episode is not None:
+        #     self._validate_episode(episode=episode)
 
-            #Arrays to take mean over.
-            posterior_probabilities = np.exp(self.posterior_distribution[f"episode={episode}"])
+        #     #Arrays to take mean over.
+        #     posterior_probabilities = np.exp(self.posterior_distribution[f"episode={episode}"])
 
-        elif posterior_dist is not None:
+        if posterior_dist is not None:
 
+            print("posterior_dist:", posterior_dist)
+            print("posterior_dist.shape:", posterior_dist.shape)
+            # posterior_probabilities = posterior_dist.flatten()
             posterior_probabilities = np.exp(posterior_dist)
+            # posterior_probabilities = posterior_probabilities/np.sum(posterior_probabilities)
 
         total_probability = np.sum(posterior_probabilities, axis=tuple(range(posterior_probabilities.ndim)))
+
+        # print("total_probability: ", total_probability)
+        # print("posterior_probabilities.shape: ", posterior_probabilities.shape)
+        # print("posterior_probabilities: ", posterior_probabilities)
+        # print("self.parameter_ranges: ", self.parameter_ranges)
+        # print("self.parameter_ranges.shape: ", self.parameter_ranges.shape)
         
         #Calculate mean.
         _means = []
         for i in range(posterior_probabilities.ndim):
             _indexes_to_sum = [j for j in range(posterior_probabilities.ndim) if j != i]
             _probs = np.sum(posterior_probabilities, axis=tuple(_indexes_to_sum))
-            _means.append(np.sum(self.parameter_ranges[i]*_probs)/total_probability)
+            _means.append(np.sum(self.parameter_ranges[i,:]*_probs)/total_probability)
+
+        # print("posterior_probability shape: ", posterior_probabilities.shape)
+        # print("parameter_mesh shape: ", parameter_mesh.shape)
+
+
+        # # Calculate mean.
+        # _means = []
+        # for param_idx in range(parameter_mesh.shape[1]):
+        #     mean_param = 0
+        #     for param_value in np.unique(parameter_mesh[:, param_idx]):
+        #         mean_param += param_value * np.sum(posterior_probabilities[parameter_mesh[:, param_idx] == param_value])
+        #     # _probs = np.sum(posterior_probabilities, axis=tuple(_indexes_to_sum))
+        #     # _means.append(np.sum(self.parameter_ranges[:,i]*_probs)/total_probability)
+        #     _means.append(mean_param)
 
         return _means
     

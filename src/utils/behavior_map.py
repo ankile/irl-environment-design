@@ -18,7 +18,7 @@ def calculate_behavior_map(
     environment: Environment,
     reward_update: np.ndarray,
     parameter_mesh,
-    region_of_interest: np.ndarray,
+    # region_of_interest: np.ndarray,
 ) -> ExperimentResult:
     """
     Run an experiment with a given set of parameters and return the results.
@@ -30,7 +30,9 @@ def calculate_behavior_map(
     - pidx2states: a dictionary mapping indices to states visited by the policy
     """
 
-    data: np.ndarray = np.zeros_like(region_of_interest, dtype=np.int32)
+    # data: np.ndarray = np.zeros_like(region_of_interest, dtype=np.int32)
+    data: np.ndarray = np.repeat(0, len(parameter_mesh))
+
     p2idx: Dict[str, int] = {}
     pidx2states: Dict[list, int] = {}
 
@@ -48,7 +50,7 @@ def calculate_behavior_map(
 
 
         #Compute BM restricted to ROI.
-        if idx_parameter in region_of_interest:
+        # if idx_parameter in region_of_interest:
         
             #Get the transition function, reward function, and gamma from the parameter.
             _transition_func = environment.transition_function(*parameter.T)

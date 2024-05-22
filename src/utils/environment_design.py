@@ -5,6 +5,7 @@ import pickle
 import datetime
 from copy import deepcopy
 import itertools
+from scipy import interpolate
 
 from .make_environment import transition_matrix, insert_walls_into_T
 from .optimization import soft_q_iteration, grad_policy_maximization
@@ -114,6 +115,14 @@ class EnvironmentDesign():
             else:
                 T = user_params.T
             self._named_parameter_mesh.append(GenParamTuple(R=R, gamma=gamma, T=T))
+        self._named_parameter_mesh_ROI_stretch = self._named_parameter_mesh
+
+        self._unnamed_parameter_mesh = np.array(list(itertools.product(*self.all_parameter_ranges)))
+        self._unnamed_parameter_mesh_ROI_stretch = self._unnamed_parameter_mesh
+        self.all_parameter_ranges = np.array(self.all_parameter_ranges)
+        # self.parameter_ranges_ROI = self.parameter_ranges_ROI.reshape(self.parameter_ranges_ROI.shape[-1], self.parameter_ranges_ROI.shape[0]) #TODO make cleaner
+        # print("Generated parameter mesh of shape: ", self._unnamed_parameter_mesh.shape)
+        # print("self._unnamed_parameter_mesh: ", self._unnamed_parameter_mesh)
 
 
         #Determine proper dimension of mesh to calculate posterior mean. mesh is of shape (resolution R Param 1 x ... x resolution R param n x resolution gamma x resolution T param 1 x ... x resolution T param n)
@@ -192,12 +201,15 @@ class EnvironmentDesign():
                                                    parameter_ranges=self.all_parameter_ranges,
                                                    parameter_mesh=self._named_parameter_mesh,
                                                    parameter_mesh_shape = self.shaped_parameter_mesh,
-                                                   region_of_interest=region_of_interest)
+                                                   region_of_interest=region_of_interest
+                                                   )
                 
                 current_belief = pos_inference.calculate_posterior(episode=episode)
                 self.diagnostics["posterior_dist"].append(current_belief)
 
-                mean_params = pos_inference.mean(posterior_dist = current_belief)
+                mean_params = pos_inference.mean(posterior_dist = current_belief,
+                                                #  parameter_mesh = self._unnamed_parameter_mesh_ROI_stretch
+                                                )
                 self.diagnostics["parameter_means"].append(mean_params)
                 if verbose:
                     print("Mean Parameters:", mean_params)
@@ -205,12 +217,59 @@ class EnvironmentDesign():
                 region_of_interest = pos_inference.calculate_region_of_interest(log_likelihood = current_belief, confidence_interval=0.8)
                 self.diagnostics["region_of_interests"].append(region_of_interest)
 
+
                 _ROI_size = round(region_of_interest.size/current_belief.size, 2)
                 self.diagnostics["ROI_sizes"].append(_ROI_size)
                 if verbose:
                     print(f"Computed Region of Interest. Size = {_ROI_size}")
                 del _ROI_size
                 del current_belief
+
+                print("Region of interest: ", region_of_interest)
+                #Upsample parameter mesh to keep same resolution.
+                self._unnamed_parameter_mesh_ROI = self._unnamed_parameter_mesh[np.sort(region_of_interest),:]
+                print("Updated parameter mesh of shape: ", self._unnamed_parameter_mesh_ROI.shape)
+                print("self._unnamed_parameter_mesh_ROI: ", self._unnamed_parameter_mesh_ROI)
+
+                x = np.array(range(len(region_of_interest)))
+                self._unnamed_parameter_mesh_ROI_stretch = np.linspace(x.min(), x.max(), self._unnamed_parameter_mesh.shape[0])
+                _f = interpolate.interp1d(x, self._unnamed_parameter_mesh_ROI, axis=0)
+                self._unnamed_parameter_mesh_ROI_stretch = _f(self._unnamed_parameter_mesh_ROI_stretch)
+                print("After stretching")
+                # print("Updated parameter mesh of shape: ", self._unnamed_parameter_mesh_ROI_stretch.shape)
+                # print("self._unnamed_parameter_mesh: ", self._unnamed_parameter_mesh_ROI_stretch)
+
+                #Convert new mesh to named mesh.
+                self._named_parameter_mesh_ROI = []
+                for parameter in self._unnamed_parameter_mesh_ROI_stretch:
+
+                    if "R" in self.learn_what:
+                        R = parameter[:self.n_params_R]
+                    else:
+                        R = self.user_params.R
+                    
+                    if ("gamma" in self.learn_what) and ("R" in self.learn_what):
+                        gamma = parameter[self.n_params_R:self.n_params_R+self.n_params_gamma]
+                    elif "gamma" in self.learn_what:
+                        gamma = parameter[:self.n_params_gamma]
+                    else:
+                        gamma = self.user_params.gamma
+
+                    if "T" in self.learn_what:
+                        T = parameter[-self.n_params_T:]
+                    else:
+                        T = self.user_params.T
+                    self._named_parameter_mesh_ROI.append(GenParamTuple(R=R, gamma=gamma, T=T))
+
+                # print("\n\nGenerated zoomed in paramter mesh:")
+
+                # #Get parameter ranges restricted to ROI.
+                # x = np.array(range(self._unnamed_parameter_mesh_ROI_stretch.shape[0]))
+                # self.parameter_ranges_ROI = np.linspace(x.min(), x.max(), 20)
+                # _f = interpolate.interp1d(x, np.sort(self._unnamed_parameter_mesh_ROI_stretch, axis=0), axis=0)
+                # self.parameter_ranges_ROI = _f(self.parameter_ranges_ROI)
+                # print("self.parameter_ranges_ROI.shape: ", self.parameter_ranges_ROI.shape)
+                # print("self.parameter_ranges_ROI", self.parameter_ranges_ROI)
 
 
                 #Get mean reward, transition, gamma according to current belief for implicit differentiation.
@@ -243,9 +302,10 @@ class EnvironmentDesign():
                 entropy_bm = EntropyBM(estimate_R = estimate_R,
                                        estimate_T = estimate_T,
                                        estimate_gamma = estimate_gamma,
-                                       named_parameter_mesh=self._named_parameter_mesh,
-                                       shaped_parameter_mesh=self.shaped_parameter_mesh,
-                                       region_of_interest=region_of_interest,
+                                    #    named_parameter_mesh=self._named_parameter_mesh,
+                                       named_parameter_mesh=self._named_parameter_mesh_ROI,
+                                    #    shaped_parameter_mesh=self.shaped_parameter_mesh,
+                                    #    region_of_interest=region_of_interest,
                                        reward_init = updated_reward,
                                        verbose=verbose
                                        )
@@ -254,15 +314,16 @@ class EnvironmentDesign():
                 #Find a reward function that maximizes the entropy of the Behavior Map. 
                 #TODO: also use transition function. Currently only do gradient updates on R. Do we want this?
                 updated_reward = entropy_bm.BM_search(base_environment = self.base_environment,
-                                                      named_parameter_mesh=self._named_parameter_mesh,
-                                                      shaped_parameter_mesh=self.shaped_parameter_mesh,
+                                                      named_parameter_mesh=self._named_parameter_mesh_ROI,
+                                                    #   shaped_parameter_mesh=self.shaped_parameter_mesh,
                                                       n_compute_BM = candidate_environments_args["n_compute_BM"],
                                                       n_iterations_gradient=candidate_environments_args["n_iterations_gradient"],
                                                       stepsize_gradient=candidate_environments_args["stepsize_gradient"],)
                                 
                 #Generate an environment in which we observe the human with maximal information gain.
                 optimal_environment = deepcopy(self.base_environment)
-                optimal_environment.max_ent_reward = updated_reward
+                optimal_environment.max_ent_reward = updated_reward - estimate_R
+                print("Maximum Entropy Reward Update: ", optimal_environment.max_ent_reward)
 
                 end_time = datetime.datetime.now()
                 run_time = end_time - start_time
@@ -437,17 +498,17 @@ class EnvironmentDesign():
         #Here, we need to disentangle the maximum entropy reward function. The maximum entropy reward function
         #is the sum of the mean reward given our belief plus the maximum entropy share. We subtract the mean reward share and add the human's reward function
         #to observe the human with their reward function (plus the maximum entropy part). 
-        if mean_reward_estimate is not None:
+        # if mean_reward_estimate is not None:
             # print("Disentagle reward function")
             # print("Mean reward estimate: ", mean_reward_estimate)
             # print("Max Entropy Reward: ", environment.max_ent_reward)
             # print("True Reward: ", environment.reward_function(*self.user_params.R))
-            _reward_function = environment.max_ent_reward
-            _reward_function -= mean_reward_estimate
-            _reward_function += environment.reward_function(*self.user_params.R)
-        else:
-            #First iteration, observe in base environment.
-            _reward_function = environment.reward_function(*self.user_params.R)
+        _reward_function = environment.max_ent_reward
+        # _reward_function -= mean_reward_estimate
+        _reward_function += environment.reward_function(*self.user_params.R)
+        # else:
+        #     #First iteration, observe in base environment.
+        #     _reward_function = environment.reward_function(*self.user_params.R)
 
         _transition_function = environment.transition_function(*self.user_params.T)
         _gamma = environment.gamma(*self.user_params.gamma)
