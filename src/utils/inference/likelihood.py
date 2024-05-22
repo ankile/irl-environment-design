@@ -55,7 +55,7 @@ def expert_trajectory_log_likelihood(
         #Add maximum entropy reward update.
         # print("env.max_ent_reward: ", env.max_ent_reward)
         # print("reward_function: ", reward_function)
-        reward_function = reward_function + env.max_ent_reward
+        reward_function = env.max_ent_reward #TODO update this
         # print("reward_function after adding max_ent_reward: ", reward_function)
 
         policy, Q, V = soft_q_iteration(

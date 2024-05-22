@@ -172,6 +172,9 @@ class EnvironmentDesign():
         self.diagnostics["posterior_dist"] = []
         self.diagnostics["ROI_sizes"] = []
         self.diagnostics["runtime_secs"] = []
+        self.diagnostics["cover_numbers"] = {}
+        self.diagnostics["entropy_BM"] = {}
+        self.diagnostics["entropy_BM_last_iterations"] = []
 
         region_of_interest = None
         updated_reward = None
@@ -253,12 +256,17 @@ class EnvironmentDesign():
 
                 #Find a reward function that maximizes the entropy of the Behavior Map. 
                 #TODO: also use transition function. Currently only do gradient updates on R. Do we want this?
-                updated_reward = entropy_bm.BM_search(base_environment = self.base_environment,
+                updated_reward, diags = entropy_bm.BM_search(base_environment = self.base_environment,
                                                       named_parameter_mesh=self._named_parameter_mesh,
                                                       shaped_parameter_mesh=self.shaped_parameter_mesh,
                                                       n_compute_BM = candidate_environments_args["n_compute_BM"],
                                                       n_iterations_gradient=candidate_environments_args["n_iterations_gradient"],
                                                       stepsize_gradient=candidate_environments_args["stepsize_gradient"],)
+                
+                #Save diagnostics.
+                self.diagnostics["cover_numbers"][episode] = diags["diagnostics_cover_numbers"]
+                self.diagnostics["entropy_BM"][episode] = diags["diagnostics_entropy"]
+                self.diagnostics["entropy_BM_last_iterations"].append(diags["diagnostics_entropy_BM_last_iteration"])
                                 
                 #Generate an environment in which we observe the human with maximal information gain.
                 optimal_environment = deepcopy(self.base_environment)
@@ -437,17 +445,12 @@ class EnvironmentDesign():
         #Here, we need to disentangle the maximum entropy reward function. The maximum entropy reward function
         #is the sum of the mean reward given our belief plus the maximum entropy share. We subtract the mean reward share and add the human's reward function
         #to observe the human with their reward function (plus the maximum entropy part). 
-        if mean_reward_estimate is not None:
+        if "R" not in self.learn_what:
             # print("Disentagle reward function")
             # print("Mean reward estimate: ", mean_reward_estimate)
             # print("Max Entropy Reward: ", environment.max_ent_reward)
             # print("True Reward: ", environment.reward_function(*self.user_params.R))
             _reward_function = environment.max_ent_reward
-            _reward_function -= mean_reward_estimate
-            _reward_function += environment.reward_function(*self.user_params.R)
-        else:
-            #First iteration, observe in base environment.
-            _reward_function = environment.reward_function(*self.user_params.R)
 
         _transition_function = environment.transition_function(*self.user_params.T)
         _gamma = environment.gamma(*self.user_params.gamma)

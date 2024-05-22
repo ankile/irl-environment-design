@@ -188,6 +188,12 @@ class EntropyBM():
         entropy_maximized: bool = False
         n_iterations = 0
 
+        #Set up diagnostics tracking.
+        diags = {}
+        diags["diagnostics_cover_numbers"] = []
+        diags["diagnostics_entropy"] = []
+        diags["diagnostics_entropy_BM_last_iteration"] = None
+
         # for _ in range(n_compute_BM):
         while not entropy_maximized:
 
@@ -196,16 +202,16 @@ class EntropyBM():
             bm_out = bm.calculate_behavior_map(environment=environment,
                                                reward_update=R_entropy_update,
                                                parameter_mesh=named_parameter_mesh,
-                                               shaped_parameter_mesh=shaped_parameter_mesh,
+                                            #    shaped_parameter_mesh=shaped_parameter_mesh,
                                                region_of_interest = region_of_interest)
             
-            print("Behavior Map:", bm_out)
+            # print("Behavior Map:", bm_out)
 
             #Compute entropy of BM
             cover, max_ent_prob = self.compute_covers(bm_out)
             entropy_BM = stats.entropy(list(cover.values()))
 
-            print("Cover: ", cover)
+            # print("Cover: ", cover)
 
             #Check if the current Behavior Map has higher entropy.
             if entropy_BM > _max_ent:
@@ -224,7 +230,7 @@ class EntropyBM():
             R = R_entropy_update
 
             #Check if the entropy of the Behavior Map has been maximized.
-            if (np.isclose(_max_ent, max_ent_possible, atol = 0.01)) and max_ent_possible != 0:
+            if (np.isclose(_max_ent, max_ent_possible, rtol = 0.01)) and max_ent_possible != 0:
                 entropy_maximized = True
 
             n_iterations += 1
@@ -233,15 +239,24 @@ class EntropyBM():
                 print("\n\nReached Maximum Number of BM Computations. Terminating BM Search.\n\n")
                 break
 
-            print("Iteration: ", n_iterations)
-            print("Reward Function: ", R)
+            # print("Iteration: ", n_iterations)
+            # print("Reward Function: ", R)
+
+            
+            #Append diagnostics.
+            diags["diagnostics_cover_numbers"].append(cover)
+            diags["diagnostics_entropy"].append(entropy_BM)
+            diags["diagnostics_entropy_BM_last_iteration"] = _max_ent
 
         if self.verbose:
             print(f"Finished BM Search. Entropy: {_max_ent}. Max Ent possible: {max_ent_possible}. Cover: {_max_ent_cover}. Behaviors: {bm_out.pidx2states}")
             print("Behavior map: ", _max_ent_BM)
             print("Reward Function: ", max_ent_R)
 
-        return max_ent_R
+
+
+
+        return max_ent_R, diags
         
 
 
