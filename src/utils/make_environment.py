@@ -64,6 +64,7 @@ def insert_walls_into_T(T, wall_indices):
 
     # Set the transition probabilities into the wall states to zero.
     for s in wall_indices:
+        s = int(s)
         for a in range(n_actions):
             # Zero out all transitions leading into the wall state.
             T[:, a, s] = 0
@@ -149,8 +150,6 @@ class Environment:
         self,
         N,
         M,
-        # T_true,
-        # R_true=None,
         goal_states,
         reward_function: Callable,
         transition_function: Callable,
@@ -159,6 +158,9 @@ class Environment:
         R_sample_mean=None,
         start_state=0,
         n_walls=0,
+        T_true=None,
+        R_true=None,
+        gamma_true=None
     ):
         self.N = N
         self.M = M
@@ -178,6 +180,9 @@ class Environment:
         self.log_regret = None
         self.max_likelihood_policy = None
         self.id = None
+        self.T_true = T_true
+        self.R_true = R_true
+        self.gamma_true = gamma_true
 
 
 def is_terminal_reachable(T, goal_states, start_state=0):

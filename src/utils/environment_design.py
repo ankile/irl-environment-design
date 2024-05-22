@@ -138,7 +138,6 @@ class EnvironmentDesign():
     def run_n_episodes(self,
                        n_episodes: int,
                        candidate_environments_args: dict,
-                       bayesian_regret_how = None,
                        verbose: bool=False):
         
         '''
@@ -148,14 +147,18 @@ class EnvironmentDesign():
 
         Args:
         - n_episodes: number of episodes to run environment design for.
-        - bayesian_regret_how: how to evaluate the Bayesian Regret. Supported methods: ['value', 'likelihood'].
         - candidate_environments_args: dict for the respective candidate generation method.
         - verbose: whether to print progress.
         '''
         
         self.episodes = n_episodes
         self.candidate_environments_args = candidate_environments_args
+
+        #These are for the first iteration where we have not learned anything but need R/T/gamma to observe the agent in.
         self.base_environment.max_ent_reward = self.base_environment.reward_function(*self.user_params.R)
+        self.base_environment.R_true = self.base_environment.reward_function(*self.user_params.R)
+        self.base_environment.T_true = self.base_environment.transition_function(*self.user_params.T)
+        self.base_environment.gamma_true = self.base_environment.gamma(*self.user_params.gamma)
 
         #Observe human in base environment. Append observation to all observations.
         if verbose:
@@ -172,9 +175,11 @@ class EnvironmentDesign():
         self.diagnostics["posterior_dist"] = []
         self.diagnostics["ROI_sizes"] = []
         self.diagnostics["runtime_secs"] = []
-        self.diagnostics["cover_numbers"] = {}
-        self.diagnostics["entropy_BM"] = {}
-        self.diagnostics["entropy_BM_last_iterations"] = []
+
+        if self.candidate_environments_args["generate_how"] == "entropy_BM":
+            self.diagnostics["cover_numbers"] = {}
+            self.diagnostics["entropy_BM"] = {}
+            self.diagnostics["entropy_BM_last_iterations"] = []
 
         region_of_interest = None
         updated_reward = None
@@ -184,7 +189,49 @@ class EnvironmentDesign():
             if verbose:
                 print(f"Started episode {episode}.")
 
-            if candidate_environments_args["generate_how"] == "entropy_BM":
+            if candidate_environments_args["generate_how"] == "BIRL":
+
+                print("Starting conventional Bayesian IRL.")
+
+                '''
+                Conventional Bayesian IRL. Compute posterior distribution, mean and Region of Interest.
+                '''
+
+                pos_inference = PosteriorInference(base_environment=self.base_environment,
+                                                   expert_trajectories=self.all_observations,
+                                                   learn_what=self.learn_what,
+                                                   parameter_ranges=self.all_parameter_ranges,
+                                                   parameter_mesh=self._named_parameter_mesh,
+                                                   parameter_mesh_shape = self.shaped_parameter_mesh,
+                                                   region_of_interest=region_of_interest)
+                
+                current_belief = pos_inference.calculate_posterior(episode=episode)
+                self.diagnostics["posterior_dist"].append(current_belief)
+
+                mean_params = pos_inference.mean(posterior_dist = current_belief)
+                self.diagnostics["parameter_means"].append(mean_params)
+                if verbose:
+                    print("Mean Parameters:", mean_params)
+
+                region_of_interest = pos_inference.calculate_region_of_interest(log_likelihood = current_belief, confidence_interval=0.8)
+                self.diagnostics["region_of_interests"].append(region_of_interest)
+
+                _ROI_size = round(region_of_interest.size/current_belief.size, 2)
+                self.diagnostics["ROI_sizes"].append(_ROI_size)
+                if verbose:
+                    print(f"Computed Region of Interest. Size = {_ROI_size}")
+                del _ROI_size
+                del current_belief
+
+                break        
+
+            elif candidate_environments_args["generate_how"] == "entropy_BM":
+
+                print("Starting AMBER.")
+
+                '''
+                AMBER method.
+                '''
 
                 start_time = datetime.datetime.now()
 
@@ -279,10 +326,9 @@ class EnvironmentDesign():
                 
                 
 
-
-
-
             elif candidate_environments_args["generate_how"] in ["random_walls", "hard_coded_envs"]:
+
+                start_time = datetime.datetime.now()
 
                 #Generate Candidate Environments.
                 candidate_environments = self._generate_candidate_environments(num_candidate_environments=candidate_environments_args["n_environments"],
@@ -293,13 +339,22 @@ class EnvironmentDesign():
                 samples = self._sample_posterior(observations=self.all_observations,
                                                 sample_size=250,
                                                 burnin=150)
+                
+                #Calculate mean of samples.
+                p_values = [samples[i].p for i in range(len(samples))]
+                gamma_values = [samples[i].gamma for i in range(len(samples))]
+                sample_means = [np.mean(gamma_values, axis=0), np.mean(p_values, axis=0)]
+                self.diagnostics["parameter_means"].append(sample_means)
+
+                if verbose:
+                    print("Calculated mean: ", sample_means)
 
                 #Find maximum Bayesian Regret environment.
                 candidate_environments_sorted = self._environment_search(base_environment=self.base_environment,
                                         posterior_samples=samples,
                                         n_traj_per_sample=1,
                                         candidate_envs=candidate_environments,
-                                        how=bayesian_regret_how
+                                        how=candidate_environments_args["how"]
                                         )
                 
                 del samples
@@ -309,9 +364,14 @@ class EnvironmentDesign():
                 optimal_environment = candidate_environments_sorted[0]
 
                 del candidate_environments_sorted
+
+                end_time = datetime.datetime.now()
+                run_time = end_time - start_time
+                self.diagnostics["runtime_secs"].append(run_time.total_seconds())
+                del start_time, end_time, run_time
             
             #Observe human in environment. Append observation to all observations.
-            observation = self._observe_human(environment=optimal_environment,n_trajectories=1, mean_reward_estimate=estimate_R)
+            observation = self._observe_human(environment=optimal_environment,n_trajectories=1)
             self.all_observations.append(observation)
 
             del observation
@@ -376,11 +436,15 @@ class EnvironmentDesign():
                 Environment(
                     N=self.base_environment.N,
                     M=self.base_environment.M,
-                    T_true=self.base_environment.T_true,
                     goal_states=self.base_environment.goal_states,
                     wall_states=self.base_environment.wall_states,
                     n_walls=self.base_environment.n_walls,
-                    R_true=self.base_environment.R_true
+                    reward_function = None,
+                    transition_function = None,
+                    gamma = None,
+                    R_true=self.base_environment.reward_function(*self.user_params.R),
+                    T_true=self.base_environment.transition_function(*self.user_params.T),
+                    gamma_true = self.base_environment.gamma(*self.user_params.gamma),
                 )
                 for _ in range(self.num_candidate_environments)
             ]
@@ -424,7 +488,7 @@ class EnvironmentDesign():
     def _observe_human(self,
                       environment: Environment,
                       n_trajectories: int=1,
-                      mean_reward_estimate = None):
+                      ):
         
         '''
         Observe human in an environment n_trajectories times.
@@ -436,26 +500,20 @@ class EnvironmentDesign():
         - tuple of (Environment, trajectories)
         '''         
 
-        #Calculate policy of agent in environment.
-        # T_agent = transition_matrix(environment.N, environment.M, p=self.user_params.p, absorbing_states=environment.goal_states)
-        # T_agent = insert_walls_into_T(T=T_agent, wall_indices=environment.wall_states)
-        
-        # _reward_function = environment.reward_function(*self.user_params.R) + environment.max_ent_reward
+        if self.candidate_environments_args["generate_how"] == "random_walls":
+            _reward_function = environment.R_true
+            _transition_function = environment.T_true
+            _gamma = environment.gamma_true
 
-        #Here, we need to disentangle the maximum entropy reward function. The maximum entropy reward function
-        #is the sum of the mean reward given our belief plus the maximum entropy share. We subtract the mean reward share and add the human's reward function
-        #to observe the human with their reward function (plus the maximum entropy part). 
-        if "R" not in self.learn_what:
-            # print("Disentagle reward function")
-            # print("Mean reward estimate: ", mean_reward_estimate)
-            # print("Max Entropy Reward: ", environment.max_ent_reward)
-            # print("True Reward: ", environment.reward_function(*self.user_params.R))
-            _reward_function = environment.max_ent_reward
+        elif self.candidate_environments_args["generate_how"] == "entropy_BM":
 
-        _transition_function = environment.transition_function(*self.user_params.T)
-        _gamma = environment.gamma(*self.user_params.gamma)
+            _transition_function = environment.transition_function(*self.user_params.T)
+            _gamma = environment.gamma(*self.user_params.gamma)
+            if "R" not in self.learn_what:
+                _reward_function = environment.max_ent_reward
+            else:
+                raise NotImplementedError('Currently learning R is not supported.')
 
-        # print("Observing human in reward function: ", _reward_function)
 
         agent_policy = soft_q_iteration(_reward_function, _transition_function, _gamma, beta=beta_agent)
 

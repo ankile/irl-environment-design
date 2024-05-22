@@ -230,7 +230,7 @@ class EntropyBM():
             R = R_entropy_update
 
             #Check if the entropy of the Behavior Map has been maximized.
-            if (np.isclose(_max_ent, max_ent_possible, rtol = 0.01)) and max_ent_possible != 0:
+            if (np.isclose(_max_ent, max_ent_possible, rtol = 0.001)) and max_ent_possible != 0:
                 entropy_maximized = True
 
             n_iterations += 1
