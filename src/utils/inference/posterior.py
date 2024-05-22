@@ -2,7 +2,6 @@ from typing import List
 
 import numpy as np
 import matplotlib.pyplot as plt
-from tqdm import tqdm
 
 from ..make_environment import Environment
 from ..constants import ParamTuple, StateTransition
@@ -11,7 +10,7 @@ from ..inference.likelihood import expert_trajectory_log_likelihood
 
 
 
-class PosteriorInference():
+class   PosteriorInference():
 
 
     '''
@@ -21,26 +20,25 @@ class PosteriorInference():
     - resolution: int, mesh resolution of the posterior distribution.
     '''
 
-    def __init__(self, 
+    def __init__(self,
+                 base_environment: Environment,
                  expert_trajectories: List[tuple[Environment, List[StateTransition]]],
-                 resolution: int=15,
-                 min_gamma: float = 0.05,
-                 max_gamma: float = 0.95,
-                 min_p: float = 0.05,
-                 max_p: float = 0.95,
+                 learn_what: list,
+                 parameter_ranges: np.ndarray,
+                 parameter_mesh: list,
+                 parameter_mesh_shape: np.ndarray,
                  region_of_interest = None) -> None:
         
 
+        self.base_environment = base_environment
         self.expert_trajectories = expert_trajectories
-        self.resolution = resolution
-        self.min_gamma = min_gamma
-        self.max_gamma = max_gamma
-        self.min_p = min_p
-        self.max_p = max_p
+        # self.resolution = resolution
+        self.learn_what = learn_what
+        self.parameter_mesh = parameter_mesh
+        self.parameter_mesh_shape = parameter_mesh_shape
+        self.parameter_ranges = parameter_ranges
         self.region_of_interest = region_of_interest
 
-        self.gammas = np.linspace(self.min_gamma, self.max_gamma, self.resolution)
-        self.ps = np.linspace(self.min_p, self.max_p, self.resolution)
 
 
     
@@ -70,31 +68,49 @@ class PosteriorInference():
         assert (type(episode) == int) or (episode is None)
 
         def _compute_likelihood_for_episode(episode):
+                
                 #Arrays to loop over and store results.
-                log_likelihoods: np.ndarray = np.zeros(shape = (self.resolution, self.resolution))
+                log_likelihoods: np.ndarray = np.zeros_like(self.parameter_mesh_shape.flatten())
+                print(f"Beginning calculation of log-likelihood. Calculating {len(log_likelihoods)} samples.")
 
 
                 #Observations up to current episode.
                 expert_trajectories = self.expert_trajectories[:episode]
 
 
-                #Calculate log-likelihood for each (p, gamma) sample.
-                
-                for idx_p, p in tqdm(enumerate(self.ps)):
-                    for idx_gamma, gamma in tqdm(enumerate(self.gammas), leave=False):
 
-                        #If a ROI is given, only compute likelihoods for Region of Interest to save compute.
+                #Calculate log-likelihood for each parameter sample.
+                for idx_parameter, parameter in enumerate(self.parameter_mesh):
+
+                        #If a ROI is given, only compute likelihoods within Region of Interest to save compute.
                         if self.region_of_interest is not None:
-                            if ((idx_p*self.resolution)+(idx_gamma)) not in self.region_of_interest:
-                                log_likelihoods[idx_p, idx_gamma] = -np.inf
+                            if idx_parameter not in self.region_of_interest:
+                                log_likelihoods[idx_parameter] = -np.inf
                                 continue
 
-                        proposed_parameter = ParamTuple(p=p, gamma=gamma, R=None)
 
+                        #Insert parameter values into custom functions.
+                        _transition_func = self.base_environment.transition_function(*parameter.T)
+                        _reward_func = self.base_environment.reward_function(*parameter.R)
+                        _gamma = self.base_environment.gamma(*parameter.gamma)
+
+
+                        #Calculate log-likelihood.
                         likelihood = expert_trajectory_log_likelihood(
-                            proposed_parameter, expert_trajectories
+                            transition_function=_transition_func,
+                            reward_function=_reward_func,
+                            gamma=_gamma,   
+                            expert_trajectories=expert_trajectories
                         )
-                        log_likelihoods[idx_p, idx_gamma] = likelihood
+
+                        log_likelihoods[idx_parameter] = likelihood
+
+                #Unflatten likelihoods.        
+                log_likelihoods = np.array(log_likelihoods)
+                log_likelihoods = np.reshape(log_likelihoods, self.parameter_mesh_shape.shape) #TODO, is this reshape correct? E.g. do we get the right axes?s
+                
+                del _transition_func, _reward_func, _gamma
+
 
                 return log_likelihoods
 
@@ -274,14 +290,16 @@ class PosteriorInference():
 
             posterior_probabilities = np.exp(posterior_dist)
 
-        total_probability = np.sum(posterior_probabilities, axis=(0,1))
+        total_probability = np.sum(posterior_probabilities, axis=tuple(range(posterior_probabilities.ndim)))
         
         #Calculate mean.
-        mean_p = np.sum(self.ps * np.sum(posterior_probabilities, axis=1))/total_probability
-        mean_gamma = np.sum(self.gammas * np.sum(posterior_probabilities, axis=0))/total_probability
+        _means = []
+        for i in range(posterior_probabilities.ndim):
+            _indexes_to_sum = [j for j in range(posterior_probabilities.ndim) if j != i]
+            _probs = np.sum(posterior_probabilities, axis=tuple(_indexes_to_sum))
+            _means.append(np.sum(self.parameter_ranges[i]*_probs)/total_probability)
 
-
-        return ParamTuple(p=mean_p, gamma=mean_gamma, R=None)
+        return _means
     
 
     def MAP(self,

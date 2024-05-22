@@ -26,7 +26,10 @@ def compute_log_likelihood(T, policy, trajectory):
 
 
 def expert_trajectory_log_likelihood(
-    parameter_sample: ParamTuple,
+    # parameter_sample: ParamTuple,
+    transition_function,
+    reward_function,
+    gamma,
     expert_trajectories: list[tuple[Environment, list[StateTransition]]],
     # goal_states: np.array
 ) -> float:
@@ -44,16 +47,24 @@ def expert_trajectory_log_likelihood(
     V = None
     policy = None
 
-    for env, trajectories in expert_trajectories:
-        assert env.goal_states is not None, "Add goal states to environment."
-        T_agent = transition_matrix(env.N, env.M, p=parameter_sample.p, absorbing_states=env.goal_states)
-        T_agent = insert_walls_into_T(T_agent, wall_indices=env.wall_states) #this is new
+    for env, trajectories in expert_trajectories: #TODO do we need env here?
+        # assert env.goal_states is not None, "Add goal states to environment."
+        # T_agent = transition_matrix(env.N, env.M, p=parameter_sample.p, absorbing_states=env.goal_states)
+        # T_agent = insert_walls_into_T(T_agent, wall_indices=env.wall_states) #this is new
+
+        #Add maximum entropy reward update.
+        # print("env.max_ent_reward: ", env.max_ent_reward)
+        # print("reward_function: ", reward_function)
+        reward_function = env.max_ent_reward #TODO update this
+        # print("reward_function after adding max_ent_reward: ", reward_function)
+
         policy, Q, V = soft_q_iteration(
-            env.R_true, T_agent, gamma=parameter_sample.gamma, beta=beta_agent, return_what="all", Q_init=Q, V_init=V, policy_init=policy
+            reward_function, transition_function, gamma=gamma, beta=beta_agent, return_what="all", Q_init=Q, V_init=V, policy_init=policy
         )
         for traj in trajectories:
             len_traj = len(traj)
-            log_likelihood += compute_log_likelihood(T_agent, policy, traj)/len_traj #TODO: which T here? env.T_true or T_agent?
+            log_likelihood += compute_log_likelihood(transition_function, policy, traj)/len_traj #TODO: which T here? env.T_true or T_agent?
+
     if log_likelihood == -np.inf:
         print("log likelihood is negative infinity. sth is weird.")
 

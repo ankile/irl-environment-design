@@ -3,29 +3,6 @@ import torch
 from numba import jit
 
 
-# # @jit(nopython=True)
-# def value_iteration_with_policy(
-#     R: np.ndarray,
-#     T_agent: np.ndarray,
-#     gamma: float,
-#     tol: float = 1e-6,
-# ):
-#     n_states = R.shape[0]
-#     V = np.zeros(n_states)
-#     policy = np.zeros(n_states, dtype=np.int32)
-#     while True:
-#         V_new = np.zeros(n_states)
-#         for s in range(n_states):
-#             action_values = R[s] + gamma * np.sum(T_agent[s] * V, axis=1)
-#             best_action = np.argmax(action_values)
-#             V_new[s] = action_values[best_action]
-#             policy[s] = best_action
-#         if np.max(np.abs(V - V_new)) < tol:
-#             break
-#         V = V_new
-#     V = V / np.max(V) * R.max()
-#     return V, policy
-
 
 # @njit
 # @jit(nopython=True)
@@ -117,60 +94,50 @@ def soft_q_iteration(
         raise ValueError("Invalid return_what argument. Choose 'all', 'policy', 'Q', or 'V'. You gave: ", return_what)
 
 
-# def soft_q_iteration_torch(
-#     R: torch.Tensor,  # R is a one-dimensional tensor with shape (n_states,)
-#     T_agent: torch.Tensor,
-#     gamma: float,
-#     beta: float,  # Inverse temperature parameter for the softmax function
-#     tol: float = 1e-6,
-# ) -> torch.Tensor:
-#     n_states, n_actions, _ = T_agent.shape
-#     V = torch.zeros(n_states)
-#     Q = torch.zeros((n_states, n_actions))
-#     policy = torch.zeros((n_states, n_actions))
-
-#     while True:
-#         for s in range(n_states):
-#             for a in range(n_actions):
-#                 # Calculate the Q-value for action a in state s
-#                 Q[s, a] = R[s] + gamma * torch.dot(T_agent[s, a], V)
-
-#         # Apply softmax to get a probabilistic policy
-#         max_Q = torch.max(Q, axis=1, keepdim=True)[0]
-#         exp_Q = torch.exp(beta * (Q - max_Q))  # Subtract max_Q for numerical stability
-#         policy = exp_Q / torch.sum(exp_Q, axis=1, keepdim=True)
-
-#         # Calculate the value function V using the probabilistic policy
-#         V_new = torch.sum(policy * Q, axis=1)
-
-#         # Check for convergence
-#         if torch.max(torch.abs(V - V_new)) < tol:
-#             break
-
-#         V = V_new
-
-#     return policy
-
 
 def soft_bellman_update_V(R, gamma, T, V):
+    
+    if torch.isnan(V).any():
+        print("V contains NaN values.")
+        print("V: ", V)
+        print("R: ", R)
+        print("T: ", T)
+
     return torch.log(torch.sum(torch.exp(torch.matmul(T, R+gamma*V)), axis=1))
+    # _Q_Values = torch.einsum("ijk, k-> ij", T, R+gamma*V)
+    # _Q_Values = _Q_Values - torch.max(_Q_Values, axis=1, keepdims=True)[0] #Subtract max_Q for numerical stability
+    # return torch.log(torch.einsum("ij-> i", torch.exp(_Q_Values)))
+
 
 
 def soft_bellman_FP_V(R, gamma, T, V):
     return soft_bellman_update_V(R, gamma, T, V) - V
 
 
-def soft_V_iteration_torch(R, gamma, T, V_init=None, tol=1e-6):
+def soft_V_iteration_torch(R, gamma, T, V_init=None, tol=1e-4):
     if V_init is None:
-        V_init = torch.zeros(49)
+        V_init = torch.zeros_like(R)
 
     V = V_init
+
+    n_iterations = 0
     
     while True:
+
+        n_iterations += 1
         V_new = soft_bellman_update_V(R, gamma,T, V)
         if torch.max(torch.abs(V - V_new)) < tol:
             break
+
+        if n_iterations % 1_000 == 0:
+            print("Warning: Soft V-iteration did not converge within 1_000 steps.")
+            print("Error: ", torch.max(torch.abs(V - V_new)))
+
         V = V_new
+
+
+
+
     return V
 
 
@@ -196,7 +163,7 @@ def differentiate_V(R: torch.tensor, gamma: torch.tensor, T: torch.tensor, V: to
     '''
 
     #Perform value iteration to find a fixed point of the Bellman operator.
-    V_star = soft_V_iteration_torch(R, gamma, T, V_init=V, tol=1e-6)
+    V_star = soft_V_iteration_torch(R, gamma, T, V_init=V, tol=1e-3)
 
     #Calculate the gradient of the value function using the implicit function theorem.
     # A closed form expression for V is given by psi.

@@ -160,17 +160,12 @@ class Experiment_2D:
         self,
         prob: float,
         gamma: float,
-        params: dict,
-        # transition_func: Callable[..., np.ndarray],
-        use_pessimistic: bool = False,
     ) -> MDP_2D:
         """
 
         """
         self.gamma = gamma
 
-        if not use_pessimistic:
-            self.action_success_prob = prob
 
         S, A, T, R = self.make_MDP_params()
         # T = transition_func(
@@ -180,33 +175,3 @@ class Experiment_2D:
         self.mdp = MDP_2D(S, A, T, R, self.gamma)
 
         return self.mdp
-
-
-# @njit(nopython=True)
-# def value_iteration_with_policy(
-#     R: np.ndarray,
-#     T_agent: np.ndarray,
-#     gamma: float,
-#     tol: float = 1e-6,
-#     V: np.array = None,
-#     policy: np.array = None
-# ):
-    
-#     n_states = R.shape[0]
-#     if V is None:
-#         V = np.zeros(n_states, dtype=np.float64)
-#     if policy is None:
-#         policy = np.zeros(n_states, dtype=np.float64)
-
-#     while True:
-#         V_new = np.zeros(n_states)
-#         for s in range(n_states):
-#             action_values = R[s] + gamma * np.sum(T_agent[s] * V, axis=1)
-#             best_action = np.argmax(action_values)
-#             V_new[s] = action_values[best_action]
-#             policy[s] = best_action
-#         if np.max(np.abs(V - V_new)) < tol:
-#             break
-#         V = V_new
-#     V = V / np.max(V) * R.max()
-#     return V, policy

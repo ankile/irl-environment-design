@@ -1,7 +1,7 @@
 from collections import deque
+from typing import Callable
 
 import numpy as np
-import torch
 
 
 # @jit(nopython=True)
@@ -142,30 +142,37 @@ def insert_random_walls_into_transition_matrix(
 
     return T, wall_states
 
+    
 
 class Environment:
     def __init__(
         self,
         N,
         M,
-        T_true,
-        wall_states,
+        # T_true,
+        # R_true=None,
         goal_states,
+        reward_function: Callable,
+        transition_function: Callable,
+        gamma: Callable,
+        wall_states=None,
         R_sample_mean=None,
         start_state=0,
         n_walls=0,
-        R_true=None,
     ):
         self.N = N
         self.M = M
-        self.T_true = T_true
+        # self.T_true = T_true
         self.wall_states = wall_states
         self.R_sample_mean = R_sample_mean
         self.n_walls = n_walls
         self.start_state = start_state
         self.goal_states = goal_states
+        self.reward_function = reward_function
+        self.transition_function = transition_function
+        self.gamma = gamma
 
-        self.R_true = R_true
+        # self.R_true = R_true
         self.trajectories = None
         self.regret = None
         self.log_regret = None

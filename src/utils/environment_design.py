@@ -4,18 +4,17 @@ import numpy as np
 import pickle
 import datetime
 from copy import deepcopy
+import itertools
 
 from .make_environment import transition_matrix, insert_walls_into_T
 from .optimization import soft_q_iteration, grad_policy_maximization
-# from .optimization import value_iteration_with_policy
 from .inference.rollouts import generate_n_trajectories
 from .inference.likelihood import compute_log_likelihood
 from src.utils.inference.sampling import bayesian_parameter_learning
 from .make_environment import Environment
-from .constants import ParamTuple, beta_agent
+from .constants import beta_agent, GenParamTuple
 from .inference.posterior import PosteriorInference
 from src.utils.make_candidate_environments import EntropyBM
-from src.worlds.mdp2d import Experiment_2D
 
 
 class EnvironmentDesign():
@@ -26,13 +25,21 @@ class EnvironmentDesign():
 
     def __init__(self,
                  base_environment: Environment,
-                 user_params: ParamTuple,
-                 learn_what: list):
-        
+                 user_params: GenParamTuple,
+                 learn_what: list,
+                 parameter_ranges_R: np.array = None,
+                 parameter_ranges_gamma: np.array = None,
+                 parameter_ranges_T: np.array = None,
+    ):
         '''
         
         Args:
-        - learn_what: list: which parameters we learn, e.g. learn_what = ['R', 'gamma'] means we learn R and gamma while the transition function is assumed to be known.
+        - base_environment: Environment: the environment in which we observe the human.
+        - user_params: ParamTuple: the true, unknown parameters of the agent that we want to learn.
+        - learn_what: list: which parameters we learn, e.g. learn_what = ['R', 'gamma'] means we learn R and gamma while the transition function is assumed to be known. Allowed values: ['R', 'gamma', 'T']
+        - parameter_ranges_R: np.array: the parameter ranges for the reward function. Shape: (n_parameters_R, mesh_size).
+        - parameter_ranges_gamma: np.array: the parameter ranges for the discount rate. Shape: (1, mesh_size).
+        - parameter_ranges_T: np.array: the parameter ranges for the transition function. Shape: (n_parameters_T, mesh_size).
         '''
         
         self.base_environment = base_environment
@@ -40,7 +47,92 @@ class EnvironmentDesign():
         self.all_observations = []
         self.learn_what = learn_what
 
-        self.candidate_env_generation_methods = ["random_walls", "hard_coded_envs"]
+        self.base_environment.user_params = user_params
+
+
+        #Check whether we have both custom functions and parameter ranges for what we want to learn. For function we don't want to learn, we use the true functions.
+        if "R" in learn_what:
+            assert parameter_ranges_R is not None, "You want to learn the reward function. Provide the parameter ranges for the reward function."
+            assert parameter_ranges_R.ndim == 2, "Parameter ranges for reward function should be a two-dimensional numpy array of shape (n_parameters_R, mesh_size)."
+            self.base_environment.parameter_ranges_R = parameter_ranges_R
+
+
+        if "gamma" in learn_what:
+            assert parameter_ranges_gamma is not None, "You want to learn the discount rate. Provide the parameter ranges for the discount rate."
+            assert parameter_ranges_gamma.ndim ==2, "Parameter ranges for gamma should be a two-dimensional numpy array of shape (1, mesh_size)."
+            self.base_environment.parameter_ranges_gamma = parameter_ranges_gamma
+
+
+        if "T" in learn_what:
+            assert parameter_ranges_T is not None, "You want to learn the transition function. Provide the parameter ranges for the transition function."
+            assert parameter_ranges_T.ndim == 2, "Parameter ranges for transition function should be a two-dimensional numpy array of shape (n_parameters_T, mesh_size)."
+            self.base_environment.parameter_ranges_T = parameter_ranges_T
+
+
+
+        #Merge the parameter ranges of all learned parameters into one list of arrays. #TODO make this cleaner.
+        #List has the form [Mesh_R_1, Mesh_R_2,...,Mesh_R_n,Mesh_gamma, Mesh_T_1,...,Mesh_T_n] where Mesh is a one-dimensional numpy array containing the mesh of the parameter.
+      
+        self.all_parameter_ranges: list = []
+        if "R" in learn_what:
+            for param_range in parameter_ranges_R:
+                self.all_parameter_ranges.append(param_range)
+
+        if "gamma" in learn_what:
+            for param_range in parameter_ranges_gamma:
+                self.all_parameter_ranges.append(param_range)
+
+        if "T" in learn_what:
+            for param_range in parameter_ranges_T:
+                self.all_parameter_ranges.append(param_range)
+
+
+
+        #Generate mesh of parameters that we learn to later calculate Behavior Map and likelihood. #TODO should this be a list or an ndarray
+        self.n_params_R = parameter_ranges_R.shape[0] if "R" in learn_what else 0
+        self.n_params_gamma = parameter_ranges_gamma.shape[0] if "gamma" in learn_what else 0
+        self.n_params_T = parameter_ranges_T.shape[0] if "T" in learn_what else 0
+
+
+        self._named_parameter_mesh = []
+        for _, parameter in enumerate(itertools.product(*self.all_parameter_ranges)):
+
+            if "R" in learn_what:
+                R = parameter[:self.n_params_R]
+            else:
+                R = user_params.R
+            
+            if ("gamma" in learn_what) and ("R" in learn_what):
+                gamma = parameter[self.n_params_R:self.n_params_R+self.n_params_gamma]
+            elif "gamma" in learn_what:
+                gamma = parameter[:self.n_params_gamma]
+            else:
+                gamma = user_params.gamma
+
+            if "T" in learn_what:
+                T = parameter[-self.n_params_T:]
+            else:
+                T = user_params.T
+            self._named_parameter_mesh.append(GenParamTuple(R=R, gamma=gamma, T=T))
+
+
+        #Determine proper dimension of mesh to calculate posterior mean. mesh is of shape (resolution R Param 1 x ... x resolution R param n x resolution gamma x resolution T param 1 x ... x resolution T param n)
+        shape_mesh = []
+        if "R" in learn_what:
+            shape_mesh.append([parameter_ranges_R.shape[1]]*parameter_ranges_R.shape[0])
+        if "gamma" in learn_what:
+            shape_mesh.append([parameter_ranges_gamma.shape[1]]*parameter_ranges_gamma.shape[0])
+        if "T" in learn_what:
+            shape_mesh.append([parameter_ranges_T.shape[1]]*parameter_ranges_T.shape[0])
+
+        shape_mesh = list(itertools.chain(*shape_mesh)) #flatten list
+        self.shaped_parameter_mesh = np.empty(shape=tuple(shape_mesh))
+
+        print("Generated parameter mesh of shape: ", self.shaped_parameter_mesh.shape)
+
+
+        #Supported environment design methods.
+        self.candidate_env_generation_methods = ["random_walls", "hard_coded_envs", "Naive_BM", "entropy_BM"]
 
     
     def run_n_episodes(self,
@@ -63,12 +155,15 @@ class EnvironmentDesign():
         
         self.episodes = n_episodes
         self.candidate_environments_args = candidate_environments_args
+        self.base_environment.max_ent_reward = self.base_environment.reward_function(*self.user_params.R)
 
         #Observe human in base environment. Append observation to all observations.
         if verbose:
             print("Started episode 0.")
         observation = self._observe_human(environment=self.base_environment, n_trajectories=1)
         self.all_observations.append(observation)
+
+
         if verbose:
             print("Finished episode 0.")
         self.diagnostics = {}
@@ -77,8 +172,12 @@ class EnvironmentDesign():
         self.diagnostics["posterior_dist"] = []
         self.diagnostics["ROI_sizes"] = []
         self.diagnostics["runtime_secs"] = []
+        self.diagnostics["cover_numbers"] = {}
+        self.diagnostics["entropy_BM"] = {}
+        self.diagnostics["entropy_BM_last_iterations"] = []
 
         region_of_interest = None
+        updated_reward = None
 
         for episode in range(1,self.episodes):
         
@@ -90,17 +189,12 @@ class EnvironmentDesign():
                 start_time = datetime.datetime.now()
 
 
-                #TODO min/ max values need to be inferred from ROI. Are inferred but make this cleaner, e.g. "zoom in" on BM.
-                min_gamma = 0.5
-                max_gamma = 0.95
-                min_p = 0.5
-                max_p = 0.95
-                pos_inference = PosteriorInference(self.all_observations,
-                                                   resolution=12,
-                                                   min_gamma = min_gamma,
-                                                   max_gamma = max_gamma,
-                                                   min_p = min_p,
-                                                   max_p = max_p,
+                pos_inference = PosteriorInference(base_environment=self.base_environment,
+                                                   expert_trajectories=self.all_observations,
+                                                   learn_what=self.learn_what,
+                                                   parameter_ranges=self.all_parameter_ranges,
+                                                   parameter_mesh=self._named_parameter_mesh,
+                                                   parameter_mesh_shape = self.shaped_parameter_mesh,
                                                    region_of_interest=region_of_interest)
                 
                 current_belief = pos_inference.calculate_posterior(episode=episode)
@@ -122,56 +216,61 @@ class EnvironmentDesign():
                 del current_belief
 
 
-
-                #TODO here we need to have a cleaner way to convert the parametrization into the actual function.
+                #Get mean reward, transition, gamma according to current belief for implicit differentiation.
                 if "R" in self.learn_what:
-                    R_estimate = mean_params.R
+                    estimate_R = self.base_environment.reward_function(*mean_params[:self.n_params_R])
                 else:
-                    R_estimate = self.user_params.R
+                    estimate_R = self.base_environment.reward_function(*self.user_params.R)
 
 
-                if "gamma" in self.learn_what:
-                    gamma_estimate = mean_params.gamma
+                if ("gamma" in self.learn_what) and ("R" in self.learn_what):
+                    estimate_gamma = mean_params[self.n_params_R:self.n_params_R+self.n_params_gamma]
+                elif "gamma" in self.learn_what:
+                    estimate_gamma = mean_params[:self.n_params_gamma]
                 else:
-                    gamma_estimate = self.user_params.gamma
+                    estimate_gamma = self.base_environment.gamma(*self.user_params.gamma)
+
 
 
                 if "T" in self.learn_what:
-                    T_estimate = transition_matrix(self.base_environment.N, self.base_environment.M, p=mean_params.p, absorbing_states=self.base_environment.goal_states)
-                    T_estimate = insert_walls_into_T(T=T_estimate, wall_indices=self.base_environment.wall_states)
+                    estimate_T = self.base_environment.transition_function(*mean_params[-self.n_params_T:])
                 else:
-                    T_estimate = self.base_environment.T_true
+                    estimate_T = self.base_environment.transition_function(*self.user_params.T)
                 del mean_params
 
 
 
-                param_estimates = ParamTuple(p = T_estimate, gamma=gamma_estimate, R = R_estimate)
 
 
                 #Initialize EntropyBM object.
-                entropy_bm = EntropyBM(parameter_estimates=param_estimates,
-                                       gammas = np.linspace(min_gamma, max_gamma, num=15),
-                                       probs= np.linspace(min_p, max_p, num=15),
+                entropy_bm = EntropyBM(estimate_R = estimate_R,
+                                       estimate_T = estimate_T,
+                                       estimate_gamma = estimate_gamma,
+                                       named_parameter_mesh=self._named_parameter_mesh,
+                                       shaped_parameter_mesh=self.shaped_parameter_mesh,
                                        region_of_interest=region_of_interest,
+                                       reward_init = updated_reward,
                                        verbose=verbose
                                        )
-                
-                #World to compute Behavior Map. TODO: this should take arbitrary arguments and not only gamma/p.
-                _world = Experiment_2D(self.base_environment.N,
-                                       self.base_environment.M,
-                                       rewards=R_estimate,
-                                       absorbing_states=self.base_environment.goal_states,
-                                       wall_states=self.base_environment.wall_states)
 
-                #Find a reward function that maximizes the entropy of the Behavior Map. TODO: also use transition function. Currently only do gradient updates on R.
-                updated_reward = entropy_bm.BM_search(world = _world,
-                                                      n_compute_BM = 5,
-                                                      n_iterations_gradient=20,
-                                                      stepsize_gradient=0.001)
+
+                #Find a reward function that maximizes the entropy of the Behavior Map. 
+                #TODO: also use transition function. Currently only do gradient updates on R. Do we want this?
+                updated_reward, diags = entropy_bm.BM_search(base_environment = self.base_environment,
+                                                      named_parameter_mesh=self._named_parameter_mesh,
+                                                      shaped_parameter_mesh=self.shaped_parameter_mesh,
+                                                      n_compute_BM = candidate_environments_args["n_compute_BM"],
+                                                      n_iterations_gradient=candidate_environments_args["n_iterations_gradient"],
+                                                      stepsize_gradient=candidate_environments_args["stepsize_gradient"],)
+                
+                #Save diagnostics.
+                self.diagnostics["cover_numbers"][episode] = diags["diagnostics_cover_numbers"]
+                self.diagnostics["entropy_BM"][episode] = diags["diagnostics_entropy"]
+                self.diagnostics["entropy_BM_last_iterations"].append(diags["diagnostics_entropy_BM_last_iteration"])
                                 
                 #Generate an environment in which we observe the human with maximal information gain.
                 optimal_environment = deepcopy(self.base_environment)
-                optimal_environment.R_true = updated_reward
+                optimal_environment.max_ent_reward = updated_reward
 
                 end_time = datetime.datetime.now()
                 run_time = end_time - start_time
@@ -212,7 +311,7 @@ class EnvironmentDesign():
                 del candidate_environments_sorted
             
             #Observe human in environment. Append observation to all observations.
-            observation = self._observe_human(environment=optimal_environment,n_trajectories=1)
+            observation = self._observe_human(environment=optimal_environment,n_trajectories=1, mean_reward_estimate=estimate_R)
             self.all_observations.append(observation)
 
             del observation
@@ -324,7 +423,8 @@ class EnvironmentDesign():
 
     def _observe_human(self,
                       environment: Environment,
-                      n_trajectories: int=1):
+                      n_trajectories: int=1,
+                      mean_reward_estimate = None):
         
         '''
         Observe human in an environment n_trajectories times.
@@ -334,25 +434,40 @@ class EnvironmentDesign():
 
         Returns:
         - tuple of (Environment, trajectories)
-        '''
-        
+        '''         
 
         #Calculate policy of agent in environment.
-        T_agent = transition_matrix(environment.N, environment.M, p=self.user_params.p, absorbing_states=environment.goal_states)
-        T_agent = insert_walls_into_T(T=T_agent, wall_indices=environment.wall_states)
-        #Here we use the (possibly updated) reward function and not the initial ('true') reward function
-        agent_policy = soft_q_iteration(environment.R_true, T_agent, gamma=self.user_params.gamma, beta=beta_agent)
+        # T_agent = transition_matrix(environment.N, environment.M, p=self.user_params.p, absorbing_states=environment.goal_states)
+        # T_agent = insert_walls_into_T(T=T_agent, wall_indices=environment.wall_states)
+        
+        # _reward_function = environment.reward_function(*self.user_params.R) + environment.max_ent_reward
+
+        #Here, we need to disentangle the maximum entropy reward function. The maximum entropy reward function
+        #is the sum of the mean reward given our belief plus the maximum entropy share. We subtract the mean reward share and add the human's reward function
+        #to observe the human with their reward function (plus the maximum entropy part). 
+        if "R" not in self.learn_what:
+            # print("Disentagle reward function")
+            # print("Mean reward estimate: ", mean_reward_estimate)
+            # print("Max Entropy Reward: ", environment.max_ent_reward)
+            # print("True Reward: ", environment.reward_function(*self.user_params.R))
+            _reward_function = environment.max_ent_reward
+
+        _transition_function = environment.transition_function(*self.user_params.T)
+        _gamma = environment.gamma(*self.user_params.gamma)
+
+        # print("Observing human in reward function: ", _reward_function)
+
+        agent_policy = soft_q_iteration(_reward_function, _transition_function, _gamma, beta=beta_agent)
 
         # Generate trajectories.
         trajectories = generate_n_trajectories(
-            environment.T_true,
+            _transition_function,
             agent_policy,
             environment.goal_states,
             n_trajectories=n_trajectories,
         )
 
         del agent_policy
-        del T_agent
 
         return (environment, trajectories)
 

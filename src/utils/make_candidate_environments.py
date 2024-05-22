@@ -53,44 +53,25 @@ class EntropyBM():
     - region_of_interest (list): The region of interest in the Behavior Map.
     '''
 
-    def __init__(self, parameter_estimates, 
-                 gammas, 
-                 probs, 
+    def __init__(self, 
+                 estimate_R,
+                 estimate_gamma,
+                 estimate_T, 
+                 named_parameter_mesh,
+                 shaped_parameter_mesh,
                  region_of_interest,
+                 reward_init,
                  verbose) -> None:
 
-        self.estimate_R = parameter_estimates.R
-        self.estimate_gamma = parameter_estimates.gamma
-        self.estimate_T = parameter_estimates.p
+        self.estimate_R = estimate_R
+        self.estimate_gamma = estimate_gamma
+        self.estimate_T = estimate_T
 
-        self.gammas = gammas
-        self.probs = probs
+        self.named_parameter_mesh = named_parameter_mesh
+        self.shaped_parameter_mesh = shaped_parameter_mesh
         self.region_of_interest = region_of_interest
         self.verbose = verbose
-
-
-    #TODO make this pretty, currently only works for 2-dim Behavior Map.
-    def compute_bm_ROI(self, behavior_map):
-
-        '''
-        Compute Behavior Map restricted to Region of Interest.
-
-        Args:
-        - behavior_map: The Behavior Map. Output of plot_bmap function.
-
-        Returns:
-        - behavior_ROI (list): The Behavior Map restricted to the Region of Interest.
-        '''
-        _n_rows = behavior_map.data.shape[0]
-        _n_cols = behavior_map.data.shape[1]
-
-        self.behavior_ROI = []
-        for i in range(_n_rows):
-            for j in range(_n_cols):
-                if (i*_n_rows + j) in self.region_of_interest:
-                    self.behavior_ROI.append(behavior_map.data[i,j])
-
-        del _n_rows, _n_cols
+        self.reward_init = reward_init
 
 
     def compute_covers(self, behavior_map):
@@ -107,14 +88,16 @@ class EntropyBM():
         '''
 
         #Compute Behavior Map restricted to Region of Interest.
-        self.compute_bm_ROI(behavior_map)
+        # behavior_ROI = self.compute_bm_ROI(behavior_map)
 
-        _behaviors = np.unique(self.behavior_ROI)
-        n_behavior_samples = len(self.behavior_ROI)
+        behavior_ROI = behavior_map.data.flatten()
+
+        _behaviors = np.unique(behavior_ROI)
+        n_behavior_samples = len(behavior_ROI)
         covers = {}
 
         for b in _behaviors:
-            covers[b] = np.sum(self.behavior_ROI == b) / n_behavior_samples
+            covers[b] = np.sum(behavior_ROI == b) / n_behavior_samples
 
         max_ent_cover = 1/len(_behaviors)
 
@@ -150,29 +133,37 @@ class EntropyBM():
             # Compute the gradient of the value function with respect to the reward function and the transition matrix.
             V_star, R_grad_out, _ = differentiate_V(R = R, gamma = gamma, T = T, V = V_star)
 
-
             # Update the reward function
             for behavior_idx in covers:
 
+                #Get states that are visited by the behavior.
                 cover = covers[behavior_idx]
                 _visited_states = bm_out.pidx2states[behavior_idx]
-                _visited_states = _visited_states[:-1]
 
+                #TODO: think about whether we want the next line or not.
+                # _visited_states = _visited_states[:-1]
+                
+                #Get gradient along those visited states.s
                 _masked_gradient_R = torch.zeros_like(R_grad_out)
                 _masked_gradient_R[_visited_states] = R_grad_out[_visited_states]
 
-                if cover > max_ent_cover:
-                    #Inhibit Behavior.
-                    R = R - stepsize * _masked_gradient_R  
+                # print("behavior_idx: ", behavior_idx)
+                # print("Cover: ", cover)
+                # print("Visited States: ", _visited_states)
+                # print("Gradient: ", _masked_gradient_R)
 
+                #Inhibit behavior that covers more than maximum entropy share.
+                if (cover > max_ent_cover) or (cover == 1):
+                    R = R - stepsize * _masked_gradient_R
+
+                #Excite behavior that covers less than maximum entropy share.
                 else:
-                    #Excite Behavior.
                     R = R + stepsize * _masked_gradient_R
 
         return R
     
-
-    def BM_search(self, world, n_compute_BM: int, n_iterations_gradient: int = 20, stepsize_gradient: float = 0.01):
+    
+    def BM_search(self, base_environment, named_parameter_mesh, shaped_parameter_mesh, n_compute_BM: int, n_iterations_gradient: int = 50, stepsize_gradient: float = 0.025):
 
         '''
         Find a reward function that maximizes the entropy of the Behavior Map.
@@ -181,36 +172,91 @@ class EntropyBM():
         TODO    
         '''
 
-        _world = deepcopy(world)
-        R = self.estimate_R
-        _max_ent = -np.inf
-        max_ent_R = self.estimate_R
+        environment = deepcopy(base_environment)
+        if self.reward_init is None:
+            R = self.estimate_R
+        else:
+            R = self.reward_init
 
-        for i in range(n_compute_BM):
+        print("Initialized Reward Function R:", R)
+        _max_ent = -np.inf
+        _max_ent_cover = None
+        max_ent_R = self.estimate_R
+        R_entropy_update = np.zeros_like(R)
+        region_of_interest = self.region_of_interest
+
+        entropy_maximized: bool = False
+        n_iterations = 0
+
+        #Set up diagnostics tracking.
+        diags = {}
+        diags["diagnostics_cover_numbers"] = []
+        diags["diagnostics_entropy"] = []
+        diags["diagnostics_entropy_BM_last_iteration"] = None
+
+        # for _ in range(n_compute_BM):
+        while not entropy_maximized:
 
 
             # Compute Behavior Map
-            bm_out = bm.plot_bmap(world=_world, gammas=self.gammas, probs=self.probs)
+            bm_out = bm.calculate_behavior_map(environment=environment,
+                                               reward_update=R_entropy_update,
+                                               parameter_mesh=named_parameter_mesh,
+                                            #    shaped_parameter_mesh=shaped_parameter_mesh,
+                                               region_of_interest = region_of_interest)
+            
+            # print("Behavior Map:", bm_out)
 
             #Compute entropy of BM
             cover, max_ent_prob = self.compute_covers(bm_out)
             entropy_BM = stats.entropy(list(cover.values()))
 
+            # print("Cover: ", cover)
+
             #Check if the current Behavior Map has higher entropy.
             if entropy_BM > _max_ent:
                 max_ent_possible = stats.entropy(np.repeat(max_ent_prob, repeats=int(1/max_ent_prob)))
                 _max_ent = entropy_BM
+                _max_ent_cover = cover
                 max_ent_R = R
+                _max_ent_BM = bm_out
 
             # Perform Gradient Updates on Reward Function to maximize entropy of BM.
-            R = self.gradient_updates_R(R_init = R, bm_out=bm_out, stepsize=stepsize_gradient, n_iterations=n_iterations_gradient)
+            # print("\nUpdating Reward Function\n")
+            R_entropy_update = self.gradient_updates_R(R_init = R, bm_out=bm_out, stepsize=stepsize_gradient, n_iterations=n_iterations_gradient)
+            R_entropy_update = R_entropy_update.detach().numpy()
 
             #Update Reward Function
-            _world.rewards = R.detach().numpy()
-        if self.verbose:
-            print(f"Finished BM Search. Entropy: {_max_ent}.")
+            R = R_entropy_update
 
-        return max_ent_R
+            #Check if the entropy of the Behavior Map has been maximized.
+            if (np.isclose(_max_ent, max_ent_possible, rtol = 0.01)) and max_ent_possible != 0:
+                entropy_maximized = True
+
+            n_iterations += 1
+
+            if n_iterations > n_compute_BM:
+                print("\n\nReached Maximum Number of BM Computations. Terminating BM Search.\n\n")
+                break
+
+            # print("Iteration: ", n_iterations)
+            # print("Reward Function: ", R)
+
+            
+            #Append diagnostics.
+            diags["diagnostics_cover_numbers"].append(cover)
+            diags["diagnostics_entropy"].append(entropy_BM)
+            diags["diagnostics_entropy_BM_last_iteration"] = _max_ent
+
+        if self.verbose:
+            print(f"Finished BM Search. Entropy: {_max_ent}. Max Ent possible: {max_ent_possible}. Cover: {_max_ent_cover}. Behaviors: {bm_out.pidx2states}")
+            print("Behavior map: ", _max_ent_BM)
+            print("Reward Function: ", max_ent_R)
+
+
+
+
+        return max_ent_R, diags
         
 
 
@@ -401,47 +447,47 @@ class AgnosticsBM():
                 break
 
 
-    def generate_behavior_map(self,
-                              plot_bmap: bool = False):
+    # def generate_behavior_map(self,
+    #                           plot_bmap: bool = False):
 
-        '''
-        Calculate the behavior map.
-        '''
+    #     '''
+    #     Calculate the behavior map.
+    #     '''
 
-        self.world = make_world(height=self.perturbed_environment.N,
-                          width=self.perturbed_environment.M,
-                          rewards=self.perturbed_environment.R_true,
-                          absorbing_states=self.perturbed_environment.goal_states,
-                          wall_states=self.perturbed_environment.wall_states)
+    #     self.world = make_world(height=self.perturbed_environment.N,
+    #                       width=self.perturbed_environment.M,
+    #                       rewards=self.perturbed_environment.R_true,
+    #                       absorbing_states=self.perturbed_environment.goal_states,
+    #                       wall_states=self.perturbed_environment.wall_states)
 
-        behavior_map_perturbed_environment = bm.plot_bmap(
-            world=self.world,
-            gammas=gammas,
-            probs=probs,
-            plot=plot_bmap
-        )
+    #     behavior_map_perturbed_environment = bm.plot_bmap(
+    #         world=self.world,
+    #         gammas=gammas,
+    #         probs=probs,
+    #         plot=plot_bmap
+    #     )
 
-        return behavior_map_perturbed_environment
+    #     return behavior_map_perturbed_environment
 
     
-    def plot_behavior_map(self, environment, gammas, probs):
+    # def plot_behavior_map(self, environment, gammas, probs):
 
-        '''
-        Plot the behavior map of an environment for parameter bounds gammas and probs.
-        '''
+    #     '''
+    #     Plot the behavior map of an environment for parameter bounds gammas and probs.
+    #     '''
 
-        self.world = make_world(height=environment.N,
-                          width=environment.M,
-                          rewards=environment.R_true,
-                          absorbing_states=environment.goal_states,
-                          wall_states=environment.wall_states)
+    #     self.world = make_world(height=environment.N,
+    #                       width=environment.M,
+    #                       rewards=environment.R_true,
+    #                       absorbing_states=environment.goal_states,
+    #                       wall_states=environment.wall_states)
 
-        self.behavior_map_perturbed_environment = bm.plot_bmap(
-            world=self.world,
-            gammas=gammas,
-            probs=probs,
-            plot=True
-        )
+    #     self.behavior_map_perturbed_environment = bm.plot_bmap(
+    #         world=self.world,
+    #         gammas=gammas,
+    #         probs=probs,
+    #         plot=True
+    #     )
 
     def plot_props_over_time(self, iteration=None):
 

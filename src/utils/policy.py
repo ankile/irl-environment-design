@@ -1,6 +1,3 @@
-from src.worlds.mdp2d import MDP_2D
-
-
 def follow_policy(policy, height, width, initial_state, goal_states):
     action_dict = {0: "L", 1: "R", 2: "U", 3: "D"}
     state = initial_state
@@ -29,21 +26,3 @@ def follow_policy(policy, height, width, initial_state, goal_states):
     #Add goal state to seen states.
     seen_states.append(state)
     return "".join(actions_taken), seen_states
-
-
-def get_all_absorbing_states(mdp: MDP_2D):
-    T = mdp.T
-    n_states = T.shape[1]
-    absorbing_states = set()
-
-    for state in range(n_states):
-        if all(T[action, state, state] == 1 for action in range(4)):
-            absorbing_states.add(state)
-
-    return absorbing_states
-
-
-def param_generator(parameters):
-    for param_name, param_values in parameters.items():
-        for value in param_values:
-            yield (param_name, value)
