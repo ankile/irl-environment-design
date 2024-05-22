@@ -132,7 +132,7 @@ class EnvironmentDesign():
 
 
         #Supported environment design methods.
-        self.candidate_env_generation_methods = ["random_walls", "hard_coded_envs", "Naive_BM", "entropy_BM"]
+        self.candidate_env_generation_methods = ["AMBER", "AMBER_random", "BIRL", "ED-BIRL", "ED_hard_coded_envs"]
 
     
     def run_n_episodes(self,
@@ -169,20 +169,41 @@ class EnvironmentDesign():
 
         if verbose:
             print("Finished episode 0.")
+
+        #Diagnostics to track.
         self.diagnostics = {}
         self.diagnostics["parameter_means"] = []
         self.diagnostics["region_of_interests"] = []
         self.diagnostics["posterior_dist"] = []
         self.diagnostics["ROI_sizes"] = []
         self.diagnostics["runtime_secs"] = []
-
-        if self.candidate_environments_args["generate_how"] == "entropy_BM":
+        if self.candidate_environments_args["generate_how"] in ["AMBER", "AMBER_random"]:
             self.diagnostics["cover_numbers"] = {}
             self.diagnostics["entropy_BM"] = {}
             self.diagnostics["entropy_BM_last_iterations"] = []
 
         region_of_interest = None
         updated_reward = None
+
+
+        #Check if inputs are valid.
+        assert self.candidate_environments_args["generate_how"] in self.candidate_env_generation_methods, f"Invalid candidate environment generation method. Supported methods are: {self.candidate_env_generation_methods}"
+
+        if self.candidate_environments_args["generate_how"] == "AMBER":
+            assert type(self.candidate_environments_args["n_compute_BM"]) is int, "You want to use AMBER. Provide the maximum number of BM computations as 'generate_how'."
+            assert type(self.candidate_environments_args["n_iterations"]) is int, "You want to use AMBER. Provide the number of iterations for the gradient search as 'n_iterations'."
+            assert type(self.candidate_environments_args["stepsize"]) is float, "You want to use AMBER. Provide the stepsize for the gradient search as 'stepsize'."
+
+        if self.candidate_environments_args["generate_how"] == "AMBER_random":
+            assert type(self.candidate_environments_args["n_compute_BM"]) is int, "You want to use AMBER_random. Provide the maximum number of BM computations as 'generate_how' as an int."
+            assert type(self.candidate_environments_args["n_iterations"]) is int, "You want to use AMBER_random. Provide the number of iterations for the gradient search as 'n_iterations'."
+            assert type(self.candidate_environments_args["stepsize"]) is float, "You want to use AMBER_random. Provide the stepsize for the random updates as 'stepsize'."
+
+        if self.candidate_environments_args["generate_how"] == "ED-BIRL":
+            assert type(self.candidate_environments_args["n_walls"]) is int, "You want to use ED-BIRL. Provide the number of walls to insert as 'n_walls'."
+            assert self.candidate_environments_args["how"] in ['value', 'likelihood'], "You want to use ED-BIRL. Provide the method to calculate the regret as 'how'. Supported methods are 'value' and 'likelihood'."
+            assert type(self.candidate_environments_args["n_environments"]) is int, "Provide an integer amount of candidate environments as 'n_environments'."
+
 
         for episode in range(1,self.episodes):
         
@@ -225,7 +246,7 @@ class EnvironmentDesign():
 
                 break        
 
-            elif candidate_environments_args["generate_how"] == "entropy_BM":
+            elif candidate_environments_args["generate_how"] == "AMBER":
 
                 print("Starting AMBER.")
 
@@ -305,10 +326,8 @@ class EnvironmentDesign():
                 #TODO: also use transition function. Currently only do gradient updates on R. Do we want this?
                 updated_reward, diags = entropy_bm.BM_search(base_environment = self.base_environment,
                                                       named_parameter_mesh=self._named_parameter_mesh,
-                                                      shaped_parameter_mesh=self.shaped_parameter_mesh,
-                                                      n_compute_BM = candidate_environments_args["n_compute_BM"],
-                                                      n_iterations_gradient=candidate_environments_args["n_iterations_gradient"],
-                                                      stepsize_gradient=candidate_environments_args["stepsize_gradient"],)
+                                                        candidate_environment_args = candidate_environments_args,
+                                                        search_how = "gradient")
                 
                 #Save diagnostics.
                 self.diagnostics["cover_numbers"][episode] = diags["diagnostics_cover_numbers"]
@@ -326,7 +345,7 @@ class EnvironmentDesign():
                 
                 
 
-            elif candidate_environments_args["generate_how"] in ["random_walls", "hard_coded_envs"]:
+            elif candidate_environments_args["generate_how"] in ["ED-BIRL", "hard_coded_envs"]:
 
                 start_time = datetime.datetime.now()
 
@@ -340,14 +359,6 @@ class EnvironmentDesign():
                                                 sample_size=250,
                                                 burnin=150)
                 
-                #Calculate mean of samples.
-                p_values = [samples[i].p for i in range(len(samples))]
-                gamma_values = [samples[i].gamma for i in range(len(samples))]
-                sample_means = [np.mean(gamma_values, axis=0), np.mean(p_values, axis=0)]
-                self.diagnostics["parameter_means"].append(sample_means)
-
-                if verbose:
-                    print("Calculated mean: ", sample_means)
 
                 #Find maximum Bayesian Regret environment.
                 candidate_environments_sorted = self._environment_search(base_environment=self.base_environment,
@@ -369,7 +380,137 @@ class EnvironmentDesign():
                 run_time = end_time - start_time
                 self.diagnostics["runtime_secs"].append(run_time.total_seconds())
                 del start_time, end_time, run_time
+
+
+                #Posterior inference to accurately calculate posterior mean.
+                pos_inference = PosteriorInference(base_environment=self.base_environment,
+                                                   expert_trajectories=self.all_observations,
+                                                   learn_what=self.learn_what,
+                                                   parameter_ranges=self.all_parameter_ranges,
+                                                   parameter_mesh=self._named_parameter_mesh,
+                                                   parameter_mesh_shape = self.shaped_parameter_mesh,
+                                                   region_of_interest=region_of_interest)
+                
+                current_belief = pos_inference.calculate_posterior(episode=episode)
+                self.diagnostics["posterior_dist"].append(current_belief)
+
+                mean_params = pos_inference.mean(posterior_dist = current_belief)
+                self.diagnostics["parameter_means"].append(mean_params)
+                if verbose:
+                    print("Mean Parameters:", mean_params)
+
+                region_of_interest = pos_inference.calculate_region_of_interest(log_likelihood = current_belief, confidence_interval=0.8)
+                self.diagnostics["region_of_interests"].append(region_of_interest)
+
+                _ROI_size = round(region_of_interest.size/current_belief.size, 2)
+                self.diagnostics["ROI_sizes"].append(_ROI_size)
+                if verbose:
+                    print(f"Computed Region of Interest. Size = {_ROI_size}")
+                del _ROI_size
+                del current_belief
+
+
+
+            #TODO lots of code repeated, put in functions.
+            elif candidate_environments_args["generate_how"] == "AMBER_random":
+
+                print("Starting AMBER with random candidate environments.")
+
+
+                start_time = datetime.datetime.now()
+
+
+                pos_inference = PosteriorInference(base_environment=self.base_environment,
+                                                   expert_trajectories=self.all_observations,
+                                                   learn_what=self.learn_what,
+                                                   parameter_ranges=self.all_parameter_ranges,
+                                                   parameter_mesh=self._named_parameter_mesh,
+                                                   parameter_mesh_shape = self.shaped_parameter_mesh,
+                                                   region_of_interest=region_of_interest)
+                
+                current_belief = pos_inference.calculate_posterior(episode=episode)
+                self.diagnostics["posterior_dist"].append(current_belief)
+
+                mean_params = pos_inference.mean(posterior_dist = current_belief)
+                self.diagnostics["parameter_means"].append(mean_params)
+                if verbose:
+                    print("Mean Parameters:", mean_params)
+
+                region_of_interest = pos_inference.calculate_region_of_interest(log_likelihood = current_belief, confidence_interval=0.8)
+                self.diagnostics["region_of_interests"].append(region_of_interest)
+
+                _ROI_size = round(region_of_interest.size/current_belief.size, 2)
+                self.diagnostics["ROI_sizes"].append(_ROI_size)
+                if verbose:
+                    print(f"Computed Region of Interest. Size = {_ROI_size}")
+                del _ROI_size
+                del current_belief
+
+
+                #Get mean reward, transition, gamma according to current belief for implicit differentiation.
+                if "R" in self.learn_what:
+                    estimate_R = self.base_environment.reward_function(*mean_params[:self.n_params_R])
+                else:
+                    estimate_R = self.base_environment.reward_function(*self.user_params.R)
+
+
+                if ("gamma" in self.learn_what) and ("R" in self.learn_what):
+                    estimate_gamma = mean_params[self.n_params_R:self.n_params_R+self.n_params_gamma]
+                elif "gamma" in self.learn_what:
+                    estimate_gamma = mean_params[:self.n_params_gamma]
+                else:
+                    estimate_gamma = self.base_environment.gamma(*self.user_params.gamma)
+
+
+
+                if "T" in self.learn_what:
+                    estimate_T = self.base_environment.transition_function(*mean_params[-self.n_params_T:])
+                else:
+                    estimate_T = self.base_environment.transition_function(*self.user_params.T)
+                del mean_params
+
+
+
+                #Initialize EntropyBM object.
+                entropy_bm = EntropyBM(estimate_R = estimate_R,
+                                       estimate_T = estimate_T,
+                                       estimate_gamma = estimate_gamma,
+                                       named_parameter_mesh=self._named_parameter_mesh,
+                                       shaped_parameter_mesh=self.shaped_parameter_mesh,
+                                       region_of_interest=region_of_interest,
+                                       reward_init = updated_reward,
+                                       verbose=verbose
+                                       )
+
+
+                #Find a reward function that maximizes the entropy of the Behavior Map. 
+                #TODO: also use transition function. Currently only do gradient updates on R. Do we want this?
+                updated_reward, diags = entropy_bm.BM_search(base_environment = self.base_environment,
+                                                      named_parameter_mesh=self._named_parameter_mesh,
+                                                      candidate_environment_args = candidate_environments_args,
+                                                      search_how="random")
+                
+                #Save diagnostics.
+                self.diagnostics["cover_numbers"][episode] = diags["diagnostics_cover_numbers"]
+                self.diagnostics["entropy_BM"][episode] = diags["diagnostics_entropy"]
+                self.diagnostics["entropy_BM_last_iterations"].append(diags["diagnostics_entropy_BM_last_iteration"])
+                                
+                #Generate an environment in which we observe the human with maximal information gain.
+                optimal_environment = deepcopy(self.base_environment)
+                optimal_environment.max_ent_reward = updated_reward
+
+                end_time = datetime.datetime.now()
+                run_time = end_time - start_time
+                self.diagnostics["runtime_secs"].append(run_time.total_seconds())
+                del start_time, end_time, run_time                
             
+
+
+            '''
+            End of environment generation method. Observe human in optimal environment.
+            ''' 
+
+
             #Observe human in environment. Append observation to all observations.
             observation = self._observe_human(environment=optimal_environment,n_trajectories=1)
             self.all_observations.append(observation)
@@ -424,7 +565,7 @@ class EnvironmentDesign():
         generate_how = generate_how
 
 
-        if generate_how == "random_walls":
+        if generate_how == "ED-BIRL":
 
 
             #Number of walls to insert.
@@ -500,17 +641,18 @@ class EnvironmentDesign():
         - tuple of (Environment, trajectories)
         '''         
 
-        if self.candidate_environments_args["generate_how"] == "random_walls":
+        if self.candidate_environments_args["generate_how"] == "ED-BIRL":
             _reward_function = environment.R_true
             _transition_function = environment.T_true
             _gamma = environment.gamma_true
 
-        elif self.candidate_environments_args["generate_how"] == "entropy_BM":
+        elif self.candidate_environments_args["generate_how"] in ["AMBER", "AMBER_random"]:
 
             _transition_function = environment.transition_function(*self.user_params.T)
             _gamma = environment.gamma(*self.user_params.gamma)
             if "R" not in self.learn_what:
                 _reward_function = environment.max_ent_reward
+                print("_reward_function", _reward_function)
             else:
                 raise NotImplementedError('Currently learning R is not supported.')
 

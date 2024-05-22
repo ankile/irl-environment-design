@@ -104,34 +104,38 @@ class EntropyBM():
         return covers, max_ent_cover
     
 
-    def gradient_updates_R(self, R_init, bm_out, stepsize: float = 0.001, n_iterations: int = 20):
+    def update_R(self, R_init, bm_out, update_how, how_args):
 
         '''
-        Perform gradient updates on the reward function R to maximize the entropy of the behavior map.
+        Update a reward function R to maximize the entropy of the behavior map.
 
         Args:
-        - world (Experiment_2D): The world in which the agent is acting.
+        - R_init (np.array): The initial reward function.
         - bm_out (dict): The output of the behavior map function.
-        - stepsize (float): The stepsize of the gradient updates.
-        - n_iterations (int): The number of iterations to run.
+        - Update_how ['gradient', 'random']: How to update the reward function. Gradient responds to AMBER.
+        - how_args (dict): Arguments for the how method.
 
         Returns:
-        - R (torch.tensor): The updated reward function R.
+        - R (numpy.tensor): The updated reward function R.
         '''
 
         covers, max_ent_cover = self.compute_covers(bm_out)
 
         # Initialize learning parameters
-        R = torch.tensor(R_init, dtype=torch.float32)
-        gamma = torch.tensor(self.estimate_gamma, dtype=torch.float32)
-        T = torch.tensor(self.estimate_T, dtype=torch.float32)
-        V_star = torch.zeros_like(R)
+        if update_how == "gradient":
+            R = torch.tensor(R_init, dtype=torch.float32)
+            gamma = torch.tensor(self.estimate_gamma, dtype=torch.float32)
+            T = torch.tensor(self.estimate_T, dtype=torch.float32)
+            V_star = torch.zeros_like(R)
 
-        for _ in range(n_iterations):
+        elif update_how == "random":
+            R = R_init
 
+        for _ in range(how_args["n_iterations"]):
 
-            # Compute the gradient of the value function with respect to the reward function and the transition matrix.
-            V_star, R_grad_out, _ = differentiate_V(R = R, gamma = gamma, T = T, V = V_star)
+            if update_how == "gradient":
+                # Compute the gradient of the value function with respect to the reward function and the transition matrix.
+                V_star, R_grad_out, _ = differentiate_V(R = R, gamma = gamma, T = T, V = V_star)
 
             # Update the reward function
             for behavior_idx in covers:
@@ -140,31 +144,76 @@ class EntropyBM():
                 cover = covers[behavior_idx]
                 _visited_states = bm_out.pidx2states[behavior_idx]
 
-                #TODO: think about whether we want the next line or not.
-                # _visited_states = _visited_states[:-1]
-                
-                #Get gradient along those visited states.s
-                _masked_gradient_R = torch.zeros_like(R_grad_out)
-                _masked_gradient_R[_visited_states] = R_grad_out[_visited_states]
 
-                # print("behavior_idx: ", behavior_idx)
-                # print("Cover: ", cover)
-                # print("Visited States: ", _visited_states)
-                # print("Gradient: ", _masked_gradient_R)
+                if update_how == "gradient":
+                    #TODO: think about whether we want the next line or not.
+                    # _visited_states = _visited_states[:-1]
+                    
+                    #Get gradient along those visited states.s
+                    _masked_gradient_R = torch.zeros_like(R_grad_out)
+                    _masked_gradient_R[_visited_states] = R_grad_out[_visited_states]
 
-                #Inhibit behavior that covers more than maximum entropy share.
-                if (cover > max_ent_cover) or (cover == 1):
-                    R = R - stepsize * _masked_gradient_R
+                    #Inhibit behavior that covers more than maximum entropy share.
+                    if (cover > max_ent_cover) or (cover == 1):
+                        R = R - how_args["stepsize"] * _masked_gradient_R
 
-                #Excite behavior that covers less than maximum entropy share.
-                else:
-                    R = R + stepsize * _masked_gradient_R
+                    #Excite behavior that covers less than maximum entropy share.
+                    else:
+                        R = R + how_args["stepsize"] * _masked_gradient_R
+
+                    R = R.detach().numpy()
+
+                elif update_how == "random":
+
+                    if (cover > max_ent_cover) or (cover == 1):
+                        R = self.change_reward_randomly(states = _visited_states, what = "inhibit", reward_function = R, stepsize = how_args["stepsize"])
+                    
+                    else:
+                        R = self.change_reward_randomly(states = _visited_states, what = "excite", reward_function = R, stepsize = how_args["stepsize"])
 
         return R
     
-    
-    def BM_search(self, base_environment, named_parameter_mesh, shaped_parameter_mesh, n_compute_BM: int, n_iterations_gradient: int = 50, stepsize_gradient: float = 0.025):
+    def change_reward_randomly(self, states, what: str, reward_function: np.array, stepsize: float):
 
+        '''
+        Randomly change reward function along rollout of policy.
+
+        Args:
+        - states (list): The states along which the reward function is changed.
+        - what (str): What to do with the reward function. Either 'excite' or 'inhibit'.
+        - reward_function (np.array): The reward function to change.
+
+        Returns:
+        - reward_function (np.array): The updated reward function.
+        '''
+
+
+        assert what in ["excite", "inhibit"], "What to do with the reward function not recognized. Choose either 'excite' or 'inhibit'."
+
+        #Remove start state and goal states from states.
+        admissable_states = np.setdiff1d(list(states), [0]) #TODO infer this, currently hard coded.
+        # admissable_states = np.setdiff1d(admissable_states, self.environment.goal_states)
+
+        random_state = np.random.choice(admissable_states, size = 1)
+        random_reward_ranges_min = 0
+        random_reward_ranges_max = 0.5*np.max(reward_function)
+
+
+        if what == "excite":
+            reward_function[random_state] += stepsize*np.random.uniform(low = random_reward_ranges_min, high = random_reward_ranges_max)
+        elif what == "inhibit":
+            reward_function[random_state] -= stepsize*np.random.uniform(low = random_reward_ranges_min, high = random_reward_ranges_max)
+
+        return reward_function
+
+    
+    
+    def BM_search(self, 
+                  base_environment, 
+                  named_parameter_mesh, 
+                  candidate_environment_args,
+                  search_how: str = "gradient",
+                ):
         '''
         Find a reward function that maximizes the entropy of the Behavior Map.
 
@@ -172,13 +221,14 @@ class EntropyBM():
         TODO    
         '''
 
+        assert search_how in ["gradient", "random"], "Search method not recognized. Choose either 'gradient' or 'random'."
+
         environment = deepcopy(base_environment)
         if self.reward_init is None:
             R = self.estimate_R
         else:
             R = self.reward_init
 
-        print("Initialized Reward Function R:", R)
         _max_ent = -np.inf
         _max_ent_cover = None
         max_ent_R = self.estimate_R
@@ -202,7 +252,6 @@ class EntropyBM():
             bm_out = bm.calculate_behavior_map(environment=environment,
                                                reward_update=R_entropy_update,
                                                parameter_mesh=named_parameter_mesh,
-                                            #    shaped_parameter_mesh=shaped_parameter_mesh,
                                                region_of_interest = region_of_interest)
             
             # print("Behavior Map:", bm_out)
@@ -222,20 +271,24 @@ class EntropyBM():
                 _max_ent_BM = bm_out
 
             # Perform Gradient Updates on Reward Function to maximize entropy of BM.
-            # print("\nUpdating Reward Function\n")
-            R_entropy_update = self.gradient_updates_R(R_init = R, bm_out=bm_out, stepsize=stepsize_gradient, n_iterations=n_iterations_gradient)
-            R_entropy_update = R_entropy_update.detach().numpy()
+            if search_how == "gradient":
+                max_ent_R = self.update_R(R_init = R, bm_out=bm_out, update_how = "gradient", how_args = candidate_environment_args)
 
-            #Update Reward Function
-            R = R_entropy_update
 
+            # Randomly change reward function along rollout of policy.
+            elif search_how == "random":
+                max_ent_R = self.update_R(R_init = R, bm_out=bm_out, update_how = "random", how_args = candidate_environment_args)
+
+            #Maximum Entropy Reward update:
+            R_entropy_update = max_ent_R
+            
             #Check if the entropy of the Behavior Map has been maximized.
             if (np.isclose(_max_ent, max_ent_possible, rtol = 0.001)) and max_ent_possible != 0:
                 entropy_maximized = True
 
             n_iterations += 1
 
-            if n_iterations > n_compute_BM:
+            if n_iterations > candidate_environment_args["n_compute_BM"]:
                 print("\n\nReached Maximum Number of BM Computations. Terminating BM Search.\n\n")
                 break
 
@@ -248,12 +301,11 @@ class EntropyBM():
             diags["diagnostics_entropy"].append(entropy_BM)
             diags["diagnostics_entropy_BM_last_iteration"] = _max_ent
 
+
         if self.verbose:
             print(f"Finished BM Search. Entropy: {_max_ent}. Max Ent possible: {max_ent_possible}. Cover: {_max_ent_cover}. Behaviors: {bm_out.pidx2states}")
             print("Behavior map: ", _max_ent_BM)
             print("Reward Function: ", max_ent_R)
-
-
 
 
         return max_ent_R, diags
