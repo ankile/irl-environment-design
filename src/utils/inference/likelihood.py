@@ -1,7 +1,7 @@
 import numpy as np
 
 from ..constants import ParamTuple, StateTransition, beta_agent
-from ..make_environment import Environment, transition_matrix, insert_walls_into_T
+from ..make_environment import Environment
 from ..optimization import soft_q_iteration
 
 '''
@@ -60,7 +60,7 @@ def expert_trajectory_log_likelihood(
         
         # if (transition_function is not None) and (reward_function is not None) and (gamma is not None):
             #Now we are in the AMBER setting
-        reward_function = env.max_ent_reward #TODO update this, currently only works for p/ gamma.
+        # reward_function = env.max_ent_reward #TODO update this, currently only works for p/ gamma.
 
         policy, Q, V = soft_q_iteration(
             reward_function, transition_function, gamma=gamma, beta=beta_agent, return_what="all", Q_init=Q, V_init=V, policy_init=policy

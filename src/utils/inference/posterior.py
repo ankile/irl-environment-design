@@ -27,7 +27,9 @@ class   PosteriorInference():
                  parameter_ranges: np.ndarray,
                  parameter_mesh: list,
                  parameter_mesh_shape: np.ndarray,
-                 region_of_interest = None) -> None:
+                 region_of_interest = None,
+                 hard_coded_reward_function = None,
+                 hard_coded_transition_function = None) -> None:
         
 
         self.base_environment = base_environment
@@ -38,6 +40,8 @@ class   PosteriorInference():
         self.parameter_mesh_shape = parameter_mesh_shape
         self.parameter_ranges = parameter_ranges
         self.region_of_interest = region_of_interest
+        self.hard_coded_reward_function = hard_coded_reward_function
+        self.hard_coded_transition_function = hard_coded_transition_function
 
 
 
@@ -93,6 +97,11 @@ class   PosteriorInference():
                         _transition_func = self.base_environment.transition_function(*parameter.T)
                         _reward_func = self.base_environment.reward_function(*parameter.R)
                         _gamma = self.base_environment.gamma(*parameter.gamma)
+
+                        if self.hard_coded_reward_function is not None:
+                            _reward_func = self.hard_coded_reward_function
+                        if self.hard_coded_transition_function is not None:
+                            _transition_func = self.hard_coded_transition_function
 
 
                         #Calculate log-likelihood.

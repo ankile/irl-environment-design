@@ -183,7 +183,10 @@ class EnvironmentDesign():
             self.diagnostics["entropy_BM_last_iterations"] = []
 
         region_of_interest = None
-        updated_reward = None
+
+        #First iteration, initialize maximum entropy reward as the initial reward function.
+        if "R" not in self.learn_what:
+            maximum_entropy_update = self.base_environment.reward_function(*self.user_params.R)
         confidence_interval = 0.8
 
 
@@ -257,6 +260,11 @@ class EnvironmentDesign():
 
                 start_time = datetime.datetime.now()
 
+                if "R" not in self.learn_what:
+                    maximum_entropy_reward = maximum_entropy_update
+                else:
+                    maximum_entropy_reward = None
+
 
                 pos_inference = PosteriorInference(base_environment=self.base_environment,
                                                    expert_trajectories=self.all_observations,
@@ -264,7 +272,8 @@ class EnvironmentDesign():
                                                    parameter_ranges=self.all_parameter_ranges,
                                                    parameter_mesh=self._named_parameter_mesh,
                                                    parameter_mesh_shape = self.shaped_parameter_mesh,
-                                                   region_of_interest=region_of_interest)
+                                                   region_of_interest=region_of_interest,
+                                                   hard_coded_reward_function=maximum_entropy_reward)
                 
                 current_belief = pos_inference.calculate_posterior(episode=episode)
                 self.diagnostics["posterior_dist"].append(current_belief)
@@ -318,14 +327,14 @@ class EnvironmentDesign():
                                        named_parameter_mesh=self._named_parameter_mesh,
                                        shaped_parameter_mesh=self.shaped_parameter_mesh,
                                        region_of_interest=region_of_interest,
-                                       reward_init = updated_reward,
+                                       reward_init = maximum_entropy_update,
                                        verbose=verbose
                                        )
 
 
                 #Find a reward function that maximizes the entropy of the Behavior Map. 
                 #TODO: also use transition function. Currently only do gradient updates on R. Do we want this?
-                updated_reward, diags = entropy_bm.BM_search(base_environment = self.base_environment,
+                maximum_entropy_update, diags = entropy_bm.BM_search(base_environment = self.base_environment,
                                                       named_parameter_mesh=self._named_parameter_mesh,
                                                         candidate_environment_args = candidate_environments_args,
                                                         search_how = "gradient")
@@ -337,7 +346,7 @@ class EnvironmentDesign():
                                 
                 #Generate an environment in which we observe the human with maximal information gain.
                 optimal_environment = deepcopy(self.base_environment)
-                optimal_environment.max_ent_reward = updated_reward
+                optimal_environment.max_ent_reward = maximum_entropy_update
 
                 end_time = datetime.datetime.now()
                 run_time = end_time - start_time
@@ -479,14 +488,14 @@ class EnvironmentDesign():
                                        named_parameter_mesh=self._named_parameter_mesh,
                                        shaped_parameter_mesh=self.shaped_parameter_mesh,
                                        region_of_interest=region_of_interest,
-                                       reward_init = updated_reward,
+                                       reward_init = maximum_entropy_update,
                                        verbose=verbose
                                        )
 
 
                 #Find a reward function that maximizes the entropy of the Behavior Map. 
                 #TODO: also use transition function. Currently only do gradient updates on R. Do we want this?
-                updated_reward, diags = entropy_bm.BM_search(base_environment = self.base_environment,
+                maximum_entropy_update, diags = entropy_bm.BM_search(base_environment = self.base_environment,
                                                       named_parameter_mesh=self._named_parameter_mesh,
                                                       candidate_environment_args = candidate_environments_args,
                                                       search_how="random")
@@ -498,7 +507,7 @@ class EnvironmentDesign():
                                 
                 #Generate an environment in which we observe the human with maximal information gain.
                 optimal_environment = deepcopy(self.base_environment)
-                optimal_environment.max_ent_reward = updated_reward
+                optimal_environment.max_ent_reward = maximum_entropy_update
 
                 end_time = datetime.datetime.now()
                 run_time = end_time - start_time
