@@ -47,7 +47,7 @@ def expert_trajectory_log_likelihood(
     V = None
     policy = None
 
-    for env, trajectories in expert_trajectories: #TODO do we need env here?
+    for env, trajectories in expert_trajectories:
         # assert env.goal_states is not None, "Add goal states to environment."
         # T_agent = transition_matrix(env.N, env.M, p=parameter_sample.p, absorbing_states=env.goal_states)
         # T_agent = insert_walls_into_T(T_agent, wall_indices=env.wall_states) #this is new
@@ -61,7 +61,12 @@ def expert_trajectory_log_likelihood(
         # if (transition_function is not None) and (reward_function is not None) and (gamma is not None):
             #Now we are in the AMBER setting
         # reward_function = env.max_ent_reward #TODO update this, currently only works for p/ gamma.
-
+        if env.max_ent_reward is not None:
+            print("Using max ent reward: ", env.max_ent_reward)
+            reward_function = env.max_ent_reward
+        elif env.max_ent_transition is not None:
+            transition_function = env.max_ent_transition
+        
         policy, Q, V = soft_q_iteration(
             reward_function, transition_function, gamma=gamma, beta=beta_agent, return_what="all", Q_init=Q, V_init=V, policy_init=policy
         )

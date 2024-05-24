@@ -154,8 +154,13 @@ class EnvironmentDesign():
         self.episodes = n_episodes
         self.candidate_environments_args = candidate_environments_args
 
-        #These are for the first iteration where we have not learned anything but need R/T/gamma to observe the agent in.
-        self.base_environment.max_ent_reward = self.base_environment.reward_function(*self.user_params.R)
+        #These are for the first iteration in AMBER where we have not learned a maximum entropy function but need R/T/gamma to observe the agent in.
+        if "R" in self.learn_what:
+            self.base_environment.max_ent_transition = self.base_environment.transition_function(*self.user_params.T)
+        else:
+            self.base_environment.max_ent_reward = self.base_environment.reward_function(*self.user_params.R)
+
+        #For ED-BIRL.
         self.base_environment.R_true = self.base_environment.reward_function(*self.user_params.R)
         self.base_environment.T_true = self.base_environment.transition_function(*self.user_params.T)
         self.base_environment.gamma_true = self.base_environment.gamma(*self.user_params.gamma)
@@ -187,6 +192,8 @@ class EnvironmentDesign():
         #First iteration, initialize maximum entropy reward as the initial reward function.
         if "R" not in self.learn_what:
             maximum_entropy_update = self.base_environment.reward_function(*self.user_params.R)
+        else:
+            maximum_entropy_update = self.base_environment.transition_function(*self.user_params.T)
         confidence_interval = 0.8
 
 
@@ -262,8 +269,12 @@ class EnvironmentDesign():
 
                 if "R" not in self.learn_what:
                     maximum_entropy_reward = maximum_entropy_update
+                    maximum_entropy_transition = None
                 else:
                     maximum_entropy_reward = None
+                    maximum_entropy_transition = maximum_entropy_update
+                
+
 
 
                 pos_inference = PosteriorInference(base_environment=self.base_environment,
@@ -273,7 +284,8 @@ class EnvironmentDesign():
                                                    parameter_mesh=self._named_parameter_mesh,
                                                    parameter_mesh_shape = self.shaped_parameter_mesh,
                                                    region_of_interest=region_of_interest,
-                                                   hard_coded_reward_function=maximum_entropy_reward)
+                                                   hard_coded_reward_function=maximum_entropy_reward,
+                                                   hard_coded_transition_function=maximum_entropy_transition)
                 
                 current_belief = pos_inference.calculate_posterior(episode=episode)
                 self.diagnostics["posterior_dist"].append(current_belief)
@@ -327,8 +339,9 @@ class EnvironmentDesign():
                                        named_parameter_mesh=self._named_parameter_mesh,
                                        shaped_parameter_mesh=self.shaped_parameter_mesh,
                                        region_of_interest=region_of_interest,
-                                       reward_init = maximum_entropy_update,
-                                       verbose=verbose
+                                       function_init = maximum_entropy_update,
+                                       verbose=verbose,
+                                       learn_what = self.learn_what
                                        )
 
 
@@ -346,7 +359,11 @@ class EnvironmentDesign():
                                 
                 #Generate an environment in which we observe the human with maximal information gain.
                 optimal_environment = deepcopy(self.base_environment)
-                optimal_environment.max_ent_reward = maximum_entropy_update
+
+                if "R" in self.learn_what:
+                    optimal_environment.max_ent_transition = maximum_entropy_update
+                else:
+                    optimal_environment.max_ent_reward = maximum_entropy_update
 
                 end_time = datetime.datetime.now()
                 run_time = end_time - start_time
@@ -507,7 +524,7 @@ class EnvironmentDesign():
                                 
                 #Generate an environment in which we observe the human with maximal information gain.
                 optimal_environment = deepcopy(self.base_environment)
-                optimal_environment.max_ent_reward = maximum_entropy_update
+                # optimal_environment.max_ent_reward = maximum_entropy_update
 
                 end_time = datetime.datetime.now()
                 run_time = end_time - start_time
@@ -658,12 +675,13 @@ class EnvironmentDesign():
 
         elif self.candidate_environments_args["generate_how"] in ["AMBER", "AMBER_random"]:
 
+            _reward_function = environment.reward_function(*self.user_params.R)
             _transition_function = environment.transition_function(*self.user_params.T)
             _gamma = environment.gamma(*self.user_params.gamma)
             if "R" not in self.learn_what:
                 _reward_function = environment.max_ent_reward
             else:
-                raise NotImplementedError('Currently learning R is not supported.')
+                _transition_function = environment.max_ent_transition
 
 
         agent_policy = soft_q_iteration(_reward_function, _transition_function, _gamma, beta=beta_agent)

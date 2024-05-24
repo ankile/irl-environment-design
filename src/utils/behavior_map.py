@@ -16,9 +16,10 @@ ExperimentResult = namedtuple("ExperimentResult", ["data", "p2idx", "pidx2states
 #TODO, only compute over Region of Interest.
 def calculate_behavior_map(
     environment: Environment,
-    reward_update: np.ndarray,
+    entropy_update: np.ndarray,
     parameter_mesh,
     region_of_interest: np.ndarray,
+    learn_what
 ) -> ExperimentResult:
     """
     Run an experiment with a given set of parameters and return the results.
@@ -53,11 +54,15 @@ def calculate_behavior_map(
             #Get the transition function, reward function, and gamma from the parameter.
             _transition_func = environment.transition_function(*parameter.T)
             _reward_func = environment.reward_function(*parameter.R)
-            _gamma = parameter.gamma
+            _gamma = environment.gamma(*parameter.gamma)
 
 
             #Update the reward function with the maximum entropy reward update from the previous iteration.
-            _reward_func += reward_update
+            if "R" in learn_what:
+                _transition_func = entropy_update
+            else:
+                _reward_func = entropy_update
+
 
             #Run soft Q-iteration to get the optimal policy.
             policy, Q, V = soft_q_iteration(

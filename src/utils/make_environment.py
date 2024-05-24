@@ -183,6 +183,8 @@ class Environment:
         self.T_true = T_true
         self.R_true = R_true
         self.gamma_true = gamma_true
+        self.max_ent_reward = None
+        self.max_ent_transition = None
 
 
 def is_terminal_reachable(T, goal_states, start_state=0):

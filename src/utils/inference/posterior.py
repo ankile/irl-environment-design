@@ -93,16 +93,18 @@ class   PosteriorInference():
                                 continue
 
 
-                        #Insert parameter values into custom functions.
-                        _transition_func = self.base_environment.transition_function(*parameter.T)
+                        #Insert parameter values into custom functions. We insert the maximum entropy functions in the log-likelihood function as they depend on the environment.
+                        if "R" in self.learn_what:
+                            _transition_func = None
+                        else:
+                            _transition_func = self.base_environment.transition_function(*parameter.T)
                         _reward_func = self.base_environment.reward_function(*parameter.R)
                         _gamma = self.base_environment.gamma(*parameter.gamma)
 
-                        if self.hard_coded_reward_function is not None:
-                            _reward_func = self.hard_coded_reward_function
-                        if self.hard_coded_transition_function is not None:
-                            _transition_func = self.hard_coded_transition_function
-
+                        # if self.hard_coded_reward_function is not None:
+                        #     _reward_func = self.hard_coded_reward_function
+                        # if self.hard_coded_transition_function is not None:
+                        #     _transition_func = self.hard_coded_transition_function
 
                         #Calculate log-likelihood.
                         likelihood = expert_trajectory_log_likelihood(
@@ -111,6 +113,8 @@ class   PosteriorInference():
                             gamma=_gamma,   
                             expert_trajectories=expert_trajectories
                         )
+
+
 
                         log_likelihoods[idx_parameter] = likelihood
 
