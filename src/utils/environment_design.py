@@ -341,7 +341,8 @@ class EnvironmentDesign():
                                        region_of_interest=region_of_interest,
                                        function_init = maximum_entropy_update,
                                        verbose=verbose,
-                                       learn_what = self.learn_what
+                                       learn_what = self.learn_what,
+                                       wall_states=self.base_environment.wall_states
                                        )
 
 
@@ -361,7 +362,10 @@ class EnvironmentDesign():
                 optimal_environment = deepcopy(self.base_environment)
 
                 if "R" in self.learn_what:
+                    #Insert walls again to make sure we didn't delete them during gradient updates.
+                    maximum_entropy_update = insert_walls_into_T(maximum_entropy_update, wall_indices=self.base_environment.wall_states)
                     optimal_environment.max_ent_transition = maximum_entropy_update
+                    
                 else:
                     optimal_environment.max_ent_reward = maximum_entropy_update
 

@@ -1,7 +1,7 @@
 from collections import namedtuple
 
 ParamTuple = namedtuple("ParamTuple", ["p", "gamma", "R"])
-GenParamTuple = namedtuple("ParamTuple", ["T", "gamma", "R"])
+GenParamTuple = namedtuple("GenParamTuple", ["T", "gamma", "R"])
 
 StepSizeTuple = namedtuple("StepSizeTuple", ["p", "gamma", "R"])
 KnownParameter = namedtuple("KnownParameter", ["name", "value"])

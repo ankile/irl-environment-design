@@ -15,7 +15,8 @@ def soft_q_iteration(
     return_what = "policy",
     Q_init = None,
     V_init = None,
-    policy_init = None
+    policy_init = None,
+    verbose = False
 ) -> np.ndarray:
     
     '''
@@ -59,6 +60,13 @@ def soft_q_iteration(
     _n_iter = 0
 
     while True:
+
+        # if verbose:
+        #     print("V: ", V)
+        #     print("R: ", R)
+        #     print("T: ", T)
+        #     print("gamma: ", gamma)
+
         Q = np.einsum("ijk, k-> ij", T, R+gamma*V)
 
         # Apply softmax to get a probabilistic policy
@@ -71,6 +79,9 @@ def soft_q_iteration(
         # Calculate the value function V using the probabilistic policy
         V_new = np.sum(policy * Q, axis=1)
 
+        #TODO here we somehow get NaNs in the value function in the wall states. Overwrite these by 0.
+        # V_new = np.nan_to_num(V_new)
+
         # Check for convergence
         if np.max(np.abs(V - V_new)) < tol:
             break
@@ -79,7 +90,14 @@ def soft_q_iteration(
         _n_iter += 1
 
         if _n_iter == 1_000:
+            
             print("Warning: Soft Q-iteration did not converge within 1_000 steps.")
+            print("Error: ", np.max(np.abs(V - V_new)))
+            print("V: ", V)
+            print("R: ", R)
+            print("T: ", T)
+            print("gamma: ", gamma)
+
 
 
     if return_what =="all":
@@ -103,6 +121,7 @@ def soft_bellman_update_V(R, gamma, T, V):
         print("R: ", R)
         print("T: ", T)
 
+    #TODO get Nan values in wall states. Overwrite by zero. Fix this.
     return torch.log(torch.sum(torch.exp(torch.matmul(T, R+gamma*V)), axis=1))
     # _Q_Values = torch.einsum("ijk, k-> ij", T, R+gamma*V)
     # _Q_Values = _Q_Values - torch.max(_Q_Values, axis=1, keepdims=True)[0] #Subtract max_Q for numerical stability
@@ -111,6 +130,7 @@ def soft_bellman_update_V(R, gamma, T, V):
 
 
 def soft_bellman_FP_V(R, gamma, T, V):
+    #TODO get Nan values in wall states. Overwrite by zero. Fix this.
     return soft_bellman_update_V(R, gamma, T, V) - V
 
 

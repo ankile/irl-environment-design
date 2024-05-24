@@ -19,7 +19,8 @@ def calculate_behavior_map(
     entropy_update: np.ndarray,
     parameter_mesh,
     region_of_interest: np.ndarray,
-    learn_what
+    learn_what,
+    verbose_BM = False
 ) -> ExperimentResult:
     """
     Run an experiment with a given set of parameters and return the results.
@@ -66,7 +67,7 @@ def calculate_behavior_map(
 
             #Run soft Q-iteration to get the optimal policy.
             policy, Q, V = soft_q_iteration(
-                _reward_func, _transition_func, gamma=_gamma, beta=beta_agent, return_what="all", Q_init=Q, V_init=V, policy_init=policy
+                _reward_func, _transition_func, gamma=_gamma, beta=beta_agent, return_what="all", Q_init=Q, V_init=V, policy_init=policy, verbose=verbose_BM
             )
 
             #Convert stochastic Boltzmann policy into determinstic, greedy policy for rollouts.

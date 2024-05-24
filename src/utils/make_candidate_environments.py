@@ -62,7 +62,8 @@ class EntropyBM():
                  region_of_interest,
                  function_init,
                  verbose,
-                 learn_what) -> None:
+                 learn_what,
+                 wall_states) -> None:
 
         self.estimate_R = estimate_R
         self.estimate_gamma = estimate_gamma
@@ -74,6 +75,7 @@ class EntropyBM():
         self.verbose = verbose
         self.function_init = function_init
         self.learn_what = learn_what
+        self.wall_states = wall_states
 
 
     def compute_covers(self, behavior_map):
@@ -233,6 +235,7 @@ class EntropyBM():
 
 
             # print("Update T: ", T)
+            # print("Normalized T:", T/torch.sum(T, axis=2, keepdim=True))
             # print("Update T softmax: ", self.masked_softmax(T, inv_temperature=2.5))
             # print("Normalized T:", self.min_max_normalize(T))
 
@@ -243,8 +246,10 @@ class EntropyBM():
             #Normalize T via softmax.
             # return self.min_max_normalize(T)
             # return self.masked_softmax(T, inv_temperature=2.5)
-            T_norm = T/torch.sum(T, axis=2, keepdim=True)
-            return T_norm.detach().numpy()
+            T_norm = T / torch.sum(T, axis=2, keepdim=True)
+            T_norm = insert_walls_into_T(T=T_norm.detach().numpy(), wall_indices=self.wall_states)
+            # T_norm[..., self.wall_states] = 0.0
+            return T_norm
 
 
     def change_reward_randomly(self, states, what: str, reward_function: np.array, stepsize: float):
@@ -323,6 +328,8 @@ class EntropyBM():
         diags["diagnostics_entropy"] = []
         diags["diagnostics_entropy_BM_last_iteration"] = None
 
+        verbose_BM: bool = False
+
         # for _ in range(n_compute_BM):
         while not entropy_maximized:
 
@@ -332,7 +339,8 @@ class EntropyBM():
                                                entropy_update=entropy_update,
                                                parameter_mesh=named_parameter_mesh,
                                                region_of_interest = region_of_interest,
-                                               learn_what = self.learn_what)
+                                               learn_what = self.learn_what,
+                                               verbose_BM = verbose_BM)
             
             print("Behavior Map:", bm_out)
 
@@ -385,6 +393,8 @@ class EntropyBM():
             diags["diagnostics_cover_numbers"].append(cover)
             diags["diagnostics_entropy"].append(entropy_BM)
             diags["diagnostics_entropy_BM_last_iteration"] = _max_ent
+
+            # verbose_BM = True
 
 
         if self.verbose:
