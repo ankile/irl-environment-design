@@ -170,12 +170,16 @@ class EntropyBM():
             V_star = torch.zeros_like(R)
 
         elif update_how == "random":
-            R = function_init
+            if update_what == "R":
+                R = function_init
+            else:
+                T = function_init
 
-        if update_what == "R":
-            R = torch.tensor(function_init, dtype=torch.float32)
-        elif update_what == "T":
-            T = torch.tensor(function_init, dtype=torch.float32)
+        if update_how =="gradient":
+            if update_what == "R":
+                R = torch.tensor(function_init, dtype=torch.float32)
+            elif update_what == "T":
+                T = torch.tensor(function_init, dtype=torch.float32)
 
         for _ in range(how_args["n_iterations"]):
 
@@ -225,10 +229,15 @@ class EntropyBM():
                 elif update_how == "random":
 
                     if (cover > max_ent_cover) or (cover == 1):
-                        R = self.change_reward_randomly(states = _visited_states, what = "inhibit", reward_function = R, stepsize = how_args["stepsize"])
+
+                        if update_what == "R":
+                            R = self.change_function_randomly(states = _visited_states, update_what = update_what, what = "inhibit", initial_function = R, stepsize = how_args["stepsize"])
+                        elif update_what == "T":
+                            T = self.change_function_randomly(states = _visited_states, update_what = update_what, what = "inhibit", initial_function = T, stepsize = how_args["stepsize"])
                     
                     else:
-                        R = self.change_reward_randomly(states = _visited_states, what = "excite", reward_function = R, stepsize = how_args["stepsize"])
+                        if update_what =="R":
+                            R = self.change_function_randomly(states = _visited_states, what = "excite", initial_function = R, stepsize = how_args["stepsize"])
 
             if update_how == "gradient":
                 R = R.detach().numpy()
@@ -246,13 +255,16 @@ class EntropyBM():
             #Normalize T via softmax.
             # return self.min_max_normalize(T)
             # return self.masked_softmax(T, inv_temperature=2.5)
-            T_norm = T / torch.sum(T, axis=2, keepdim=True)
-            T_norm = insert_walls_into_T(T=T_norm.detach().numpy(), wall_indices=self.wall_states)
-            # T_norm[..., self.wall_states] = 0.0
-            return T_norm
+
+            if update_how == "gradient":
+                T_norm = T / torch.sum(T, axis=2, keepdim=True)
+                T_norm = insert_walls_into_T(T=T_norm.detach().numpy(), wall_indices=self.wall_states)
+                return T_norm
+            elif update_how == "random":
+                return T
 
 
-    def change_reward_randomly(self, states, what: str, reward_function: np.array, stepsize: float):
+    def change_function_randomly(self, states, update_what, what: str, initial_function: np.array, stepsize: float):
 
         '''
         Randomly change reward function along rollout of policy.
@@ -273,17 +285,30 @@ class EntropyBM():
         admissable_states = np.setdiff1d(list(states), [0]) #TODO infer this, currently hard coded.
         # admissable_states = np.setdiff1d(admissable_states, self.environment.goal_states)
 
+        if len(admissable_states) == 0:
+            return initial_function
+        
         random_state = np.random.choice(admissable_states, size = 1)
-        random_reward_ranges_min = 0
-        random_reward_ranges_max = 0.5*np.max(reward_function)
+
+        if update_what == "R":
+            random_reward_ranges_min = 0
+            random_reward_ranges_max = 0.5*np.max(initial_function)
 
 
-        if what == "excite":
-            reward_function[random_state] += stepsize*np.random.uniform(low = random_reward_ranges_min, high = random_reward_ranges_max)
-        elif what == "random":
-            reward_function[random_state] -= stepsize*np.random.uniform(low = random_reward_ranges_min, high = random_reward_ranges_max)
+            if what == "excite":
+                initial_function[random_state] += stepsize*np.random.uniform(low = random_reward_ranges_min, high = random_reward_ranges_max)
+            elif what == "inhibit":
+                initial_function[random_state] -= stepsize*np.random.uniform(low = random_reward_ranges_min, high = random_reward_ranges_max)
 
-        return reward_function
+            return initial_function
+        
+        elif update_what == "T": #transition function
+
+            if what == "inhibit":
+                if isinstance(initial_function, torch.Tensor):
+                    initial_function = initial_function.detach().numpy()
+                T = insert_walls_into_T(T=initial_function, wall_indices=random_state)
+                return torch.tensor(T, dtype=torch.float32)
 
     
     
@@ -370,10 +395,10 @@ class EntropyBM():
 
             # Randomly change reward function along rollout of policy.
             elif search_how == "random":
-                R_entropy_update = self.update_R(R_init = R, bm_out=bm_out, update_how = "random", how_args = candidate_environment_args)
-
-            #Update reward function
-            # R = R_entropy_update
+                if "R" in self.learn_what:
+                    entropy_update = self.update_covers(function_init = entropy_update, bm_out=bm_out, update_how = "random", how_args = candidate_environment_args, update_what = "T")
+                elif "T" in self.learn_what:
+                    entropy_update = self.update_covers(function_init = entropy_update, bm_out=bm_out, update_how = "random", how_args = candidate_environment_args, update_what = "R")
 
             #Check if the entropy of the Behavior Map has been maximized.
             if (np.isclose(_max_ent, max_ent_possible, rtol = 0.01)) and max_ent_possible != 0:

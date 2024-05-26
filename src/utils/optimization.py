@@ -79,9 +79,6 @@ def soft_q_iteration(
         # Calculate the value function V using the probabilistic policy
         V_new = np.sum(policy * Q, axis=1)
 
-        #TODO here we somehow get NaNs in the value function in the wall states. Overwrite these by 0.
-        # V_new = np.nan_to_num(V_new)
-
         # Check for convergence
         if np.max(np.abs(V - V_new)) < tol:
             break

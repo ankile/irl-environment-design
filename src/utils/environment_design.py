@@ -445,10 +445,22 @@ class EnvironmentDesign():
             #TODO lots of code repeated, put in functions.
             elif candidate_environments_args["generate_how"] == "AMBER_random":
 
-                print("Starting AMBER with random candidate environments.")
+                print("Starting AMBER.")
 
+                '''
+                AMBER method.
+                '''
 
                 start_time = datetime.datetime.now()
+
+                if "R" not in self.learn_what:
+                    maximum_entropy_reward = maximum_entropy_update
+                    maximum_entropy_transition = None
+                else:
+                    maximum_entropy_reward = None
+                    maximum_entropy_transition = maximum_entropy_update
+                
+
 
 
                 pos_inference = PosteriorInference(base_environment=self.base_environment,
@@ -457,7 +469,9 @@ class EnvironmentDesign():
                                                    parameter_ranges=self.all_parameter_ranges,
                                                    parameter_mesh=self._named_parameter_mesh,
                                                    parameter_mesh_shape = self.shaped_parameter_mesh,
-                                                   region_of_interest=region_of_interest)
+                                                   region_of_interest=region_of_interest,
+                                                   hard_coded_reward_function=maximum_entropy_reward,
+                                                   hard_coded_transition_function=maximum_entropy_transition)
                 
                 current_belief = pos_inference.calculate_posterior(episode=episode)
                 self.diagnostics["posterior_dist"].append(current_belief)
@@ -502,6 +516,8 @@ class EnvironmentDesign():
 
 
 
+
+
                 #Initialize EntropyBM object.
                 entropy_bm = EntropyBM(estimate_R = estimate_R,
                                        estimate_T = estimate_T,
@@ -509,8 +525,10 @@ class EnvironmentDesign():
                                        named_parameter_mesh=self._named_parameter_mesh,
                                        shaped_parameter_mesh=self.shaped_parameter_mesh,
                                        region_of_interest=region_of_interest,
-                                       reward_init = maximum_entropy_update,
-                                       verbose=verbose
+                                       function_init = maximum_entropy_update,
+                                       verbose=verbose,
+                                       learn_what = self.learn_what,
+                                       wall_states=self.base_environment.wall_states
                                        )
 
 
@@ -518,8 +536,8 @@ class EnvironmentDesign():
                 #TODO: also use transition function. Currently only do gradient updates on R. Do we want this?
                 maximum_entropy_update, diags = entropy_bm.BM_search(base_environment = self.base_environment,
                                                       named_parameter_mesh=self._named_parameter_mesh,
-                                                      candidate_environment_args = candidate_environments_args,
-                                                      search_how="random")
+                                                        candidate_environment_args = candidate_environments_args,
+                                                        search_how = "random")
                 
                 #Save diagnostics.
                 self.diagnostics["cover_numbers"][episode] = diags["diagnostics_cover_numbers"]
@@ -528,27 +546,85 @@ class EnvironmentDesign():
                                 
                 #Generate an environment in which we observe the human with maximal information gain.
                 optimal_environment = deepcopy(self.base_environment)
-                # optimal_environment.max_ent_reward = maximum_entropy_update
+
+                if "R" in self.learn_what:
+                    #Insert walls again to make sure we didn't delete them during gradient updates.
+                    # maximum_entropy_update = insert_walls_into_T(maximum_entropy_update, wall_indices=self.base_environment.wall_states)
+                    optimal_environment.max_ent_transition = maximum_entropy_update
+                    
+                else:
+                    optimal_environment.max_ent_reward = maximum_entropy_update
 
                 end_time = datetime.datetime.now()
                 run_time = end_time - start_time
                 self.diagnostics["runtime_secs"].append(run_time.total_seconds())
-                del start_time, end_time, run_time                
-            
+                del start_time, end_time, run_time
+                
+                
+
+            elif candidate_environments_args["generate_how"] in ["ED-BIRL", "hard_coded_envs"]:
+
+                start_time = datetime.datetime.now()
+
+                #Generate Candidate Environments.
+                candidate_environments = self._generate_candidate_environments(num_candidate_environments=candidate_environments_args["n_environments"],
+                                                    generate_how=candidate_environments_args["generate_how"],
+                                                    candidate_env_specs=candidate_environments_args)
+                
+                #Generate Samples from current belief.
+                samples = self._sample_posterior(observations=self.all_observations,
+                                                sample_size=250,
+                                                burnin=150)
+                
+
+                #Find maximum Bayesian Regret environment.
+                candidate_environments_sorted = self._environment_search(base_environment=self.base_environment,
+                                        posterior_samples=samples,
+                                        n_traj_per_sample=1,
+                                        candidate_envs=candidate_environments,
+                                        how=candidate_environments_args["how"]
+                                        )
+                
+                del samples
+                del candidate_environments
+                
+                #Maximum Regret environment
+                optimal_environment = candidate_environments_sorted[0]
+
+                del candidate_environments_sorted
+
+                end_time = datetime.datetime.now()
+                run_time = end_time - start_time
+                self.diagnostics["runtime_secs"].append(run_time.total_seconds())
+                del start_time, end_time, run_time
 
 
-            '''
-            End of environment generation method. Observe human in optimal environment.
-            ''' 
+                #Posterior inference to accurately calculate posterior mean.
+                pos_inference = PosteriorInference(base_environment=self.base_environment,
+                                                   expert_trajectories=self.all_observations,
+                                                   learn_what=self.learn_what,
+                                                   parameter_ranges=self.all_parameter_ranges,
+                                                   parameter_mesh=self._named_parameter_mesh,
+                                                   parameter_mesh_shape = self.shaped_parameter_mesh,
+                                                   region_of_interest=region_of_interest)
+                
+                current_belief = pos_inference.calculate_posterior(episode=episode)
+                self.diagnostics["posterior_dist"].append(current_belief)
 
+                mean_params = pos_inference.mean(posterior_dist = current_belief)
+                self.diagnostics["parameter_means"].append(mean_params)
+                if verbose:
+                    print("Mean Parameters:", mean_params)
 
-            #Observe human in environment. Append observation to all observations.
-            observation = self._observe_human(environment=optimal_environment,n_trajectories=1)
-            self.all_observations.append(observation)
+                region_of_interest = pos_inference.calculate_region_of_interest(log_likelihood = current_belief, confidence_interval=confidence_interval)
+                self.diagnostics["region_of_interests"].append(region_of_interest)
 
-            del observation
-            if verbose:
-                print(f"Finished episode {episode}.")
+                _ROI_size = round(region_of_interest.size/current_belief.size, 2)
+                self.diagnostics["ROI_sizes"].append(_ROI_size)
+                if verbose:
+                    print(f"Computed Region of Interest. Size = {_ROI_size}")
+                del _ROI_size
+                del current_belief
 
 
 
