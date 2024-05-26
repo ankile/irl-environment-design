@@ -627,6 +627,19 @@ class EnvironmentDesign():
                 del current_belief
 
 
+            '''
+            End of environment generation method. Observe human in optimal environment.
+            ''' 
+
+
+            #Observe human in environment. Append observation to all observations.
+            observation = self._observe_human(environment=optimal_environment,n_trajectories=1)
+            self.all_observations.append(observation)
+
+            del observation
+            if verbose:
+                print(f"Finished episode {episode}.")
+
 
     def save(self, experiment_name: str):
         '''
